@@ -194,18 +194,19 @@ STOPS is a list of percentage/color pairs."
 ;;;###autoload
 (defun sketch (arg)
   "Initialize or switch to (new) SVG image.
-With prefix argument,  "
+With prefix argument, create sketch using default (customizable)
+values"
   (interactive "P")
-  (let ((width (if arg (car sketch-default-image-size) (read-number "Enter width: ") ))
-        (height (if arg 600 (read-number "Enter height: ")))
-        (buffer (get-buffer "*sketch")))
+  (let ((buffer (get-buffer "*sketch*")))
     (if buffer
         (progn (switch-to-buffer buffer)
-               (call-interactively 'tutorial-transient))
-      (switch-to-buffer (get-buffer-create "*sketch"))
-      (defvar-local grid-param 25)
-      (setq grid-param (if arg 25 (read-number "Enter grid parameter (enter 0 for no grid): ")))
-      (sketch--create-canvas width height grid-param))))
+               (call-interactively 'sketch-transient))
+      (let ((width (if arg (car sketch-default-image-size) (read-number "Enter width: ") ))
+            (height (if arg 600 (read-number "Enter height: "))))
+        (switch-to-buffer (get-buffer-create "*sketch"))
+        (defvar-local grid-param 25)
+        (setq grid-param (if arg 25 (read-number "Enter grid parameter (enter 0 for no grid): ")))
+        (sketch--create-canvas width height grid-param)))))
 
 
 (defun sketch-snap-to-grid (coord grid-param)
@@ -435,9 +436,11 @@ With prefix argument,  "
   ;; (call-interactively 'tutorial-transient)
 
 (transient-define-suffix sketch-show-definition ()
+  :transient 'transient--do-exit
   (interactive)
   (let ((buffer (get-buffer-create "svg")))
-    (pp svg buffer)
+    (transient-quit-one)
+    (pp svg-sketch buffer)
     (switch-to-buffer-other-window buffer)
     (emacs-lisp-mode)))
 
@@ -446,6 +449,25 @@ With prefix argument,  "
   (with-temp-buffer
     (pp svg (current-buffer))
     (kill-new (buffer-string))))
+
+(defun sketch-load-definition ()
+  (interactive)
+  (setq svg-sketch (read (buffer-string))))
+
+(transient-define-suffix sketch-undo ()
+  (interactive)
+  (defvar sketch-undo-redo nil)
+  (let ((sketch-reverse (nreverse svg-sketch)))
+    (push (pop sketch-reverse) sketch-undo-redo)
+    (setq svg-sketch (nreverse sketch-reverse)))
+  (sketch-redraw))
+
+(transient-define-suffix sketch-redo ()
+  (interactive)
+  (let ((sketch-reverse (nreverse svg-sketch)))
+    (push (pop sketch-undo-redo) sketch-reverse)
+    (setq svg-sketch (nreverse sketch-reverse)))
+  (sketch-redraw))
 
 (transient-define-suffix sketch-save ()
   (interactive)
