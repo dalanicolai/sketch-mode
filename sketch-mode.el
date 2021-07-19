@@ -37,7 +37,13 @@
 
 ;; TODO maybe add keybindings (save/bind transient setting to specific 'mouse keys')
 
-;; TODO add functionality to toggle grid
+;; DONE add functionality to toggle grid
+
+;; TODO implement undo mechanism
+
+;; TODO add remove (objects) functionality (see `svg-remove')
+
+;; TODO add clipping fuctionality (see `svg-clip-path')
 
 ;; NOTE this is a most straightforward sketch-mode. A more advanced/general version
 ;; could implement a drawing DSL based on nodes (a la tikz/asymptote etc.)
@@ -54,8 +60,12 @@
   "Default size for sketch canvas.
 Cons cell with car and cdr both integers, respectively
 representing the image width and image height
-(default: `'(800 . 600)')."
+(default: '(800 . 600))."
   :type '(cons integer integer))
+
+(defcustom sketch-show-grid t
+  "When non-nil, show grid lines (default: t)."
+  :type 'boolean)
 
 (defcustom sketch-default-grid-parameter 25
   "Default grid line separation distance (integer)."
@@ -130,7 +140,8 @@ STOPS is a list of percentage/color pairs."
   "Create svg images using the mouse."
   nil "sketch-mode"
   '(([drag-mouse-1] . sketch-interactively)
-    ([C-S-drag-mouse-1] . sketch-interactively)))
+    ([C-S-drag-mouse-1] . sketch-interactively)
+    ("" . sketch-transient)))
 
 
 (defun sketch--circle-radius (start-coords end-coords)
@@ -154,25 +165,31 @@ STOPS is a list of percentage/color pairs."
 (defun sketch--create-canvas (width height &optional grid-param)
   "Create canvas for drawing svg using the mouse."
   (defvar svg)
-    (insert-image (let ((width width)
-                        (height height))
-                    (setq svg (svg-create width height :stroke "gray"))
-                    (svg-marker svg "arrow" 8 8 "black" t)
-                    (svg-rectangle svg 0 0 width height :fill "white")
-                    (unless (or (not grid-param) (= grid-param 0) )
-                      (let ((dash t))
-                        (dotimes (x (1- (/ width grid-param)))
-                          (let ((pos (* (1+ x) grid-param)))
-                            (svg-line svg pos 0 pos height :stroke-dasharray (when dash "2,4"))
-                            (setq dash (if dash nil t)))))
-                      (let ((dash t))
-                        (dotimes (x (1- (/ height grid-param)))
-                          (let ((pos (* (1+ x) grid-param)))
-                            (svg-line svg 0 pos width pos :stroke-dasharray (when dash "2,4"))
-                            (setq dash (if dash nil t))))))
-                    (svg-image svg :pointer 'arrow :grid-param grid-param)))
+  (defvar svg-canvas)
+  (defvar svg-grid)
+  (defvar svg-sketch)
+    (insert-image
+     (let ((width width)
+           (height height))
+       (setq svg-canvas (svg-create width height :stroke "gray"))
+       (svg-marker svg-canvas "arrow" 8 8 "black" t)
+       (svg-rectangle svg-canvas 0 0 width height :fill "white")
+       (setq svg-grid (svg-create width height))
+       (let ((dash t))
+         (dotimes (x (1- (/ width grid-param)))
+           (let ((pos (* (1+ x) grid-param)))
+             (svg-line svg-grid pos 0 pos height :stroke-dasharray (when dash "2,4"))
+             (setq dash (if dash nil t)))))
+       (let ((dash t))
+         (dotimes (x (1- (/ height grid-param)))
+           (let ((pos (* (1+ x) grid-param)))
+             (svg-line svg-grid 0 pos width pos :stroke-dasharray (when dash "2,4"))
+             (setq dash (if dash nil t)))))
+       (setq svg (append svg-canvas (when sketch-show-grid (cddr svg-grid))))
+       (svg-image svg :pointer 'arrow :grid-param grid-param)))
     (sketch-mode)
-    (call-interactively 'sketch-transient))
+    (call-interactively 'sketch-transient)
+    (setq svg-sketch (svg-create width height)))
 
 ;;;###autoload
 (defun sketch (arg)
@@ -181,12 +198,13 @@ With prefix argument,  "
   (interactive "P")
   (let ((width (if arg (car sketch-default-image-size) (read-number "Enter width: ") ))
         (height (if arg 600 (read-number "Enter height: ")))
-        (grid-param (if arg 25 (read-number "Enter grid parameter (enter 0 for no grid): ")))
         (buffer (get-buffer "*sketch")))
     (if buffer
         (progn (switch-to-buffer buffer)
                (call-interactively 'tutorial-transient))
       (switch-to-buffer (get-buffer-create "*sketch"))
+      (defvar-local grid-param 25)
+      (setq grid-param (if arg 25 (read-number "Enter grid parameter (enter 0 for no grid): ")))
       (sketch--create-canvas width height grid-param))))
 
 
@@ -284,9 +302,12 @@ With prefix argument,  "
    [("w" "stroke-width" sketch-stroke-width)]
    [("m" "end-marker" sketch-object-marker)]]
   ["Snap-to-grid"
-   ("s" "Snap to grid" sketch-snap)]
+   ("s" "Snap to grid" sketch-snap)
+   ("t" "Toggle grid" sketch-toggle-grid)]
   ["Commands"
-   [([drag-mouse-1] "Sketch"  sketch-interactively-1)]
+   [([drag-mouse-1] "Sketch"  sketch-interactively-1)
+    ("u" "Undo" sketch-undo)
+    ("r" "Redo" sketch-redo)]
    [("d" "Show definition" sketch-show-definition)
     ("D" "Copy definition" sketch-copy-definition)
     ("S" "Save image" sketch-save)]]
@@ -333,6 +354,18 @@ With prefix argument,  "
   :choices '("t")
   :default "nil")
 
+(defun sketch-toggle-grid ()
+  (interactive)
+  (setq sketch-show-grid (if sketch-show-grid nil t))
+  (sketch-redraw))
+
+(defun sketch-redraw ()
+  (unless sketch-mode
+    (user-error "Not in sketch-mode buffer"))
+  (setq svg (append svg-canvas (when sketch-show-grid (cddr svg-grid)) (cddr svg-sketch)))
+  (erase-buffer) ;; a (not exact) alternative is to use (kill-backward-chars 1)
+  (insert-image (svg-image svg :pointer 'arrow :grid-param grid-param)))
+
 (transient-define-suffix sketch-interactively-1 (event)
   (interactive "@e")
   (let* ((args (when transient-current-prefix (transient-args 'sketch-transient)))
@@ -366,9 +399,8 @@ With prefix argument,  "
                                                (car start-coords) (cdr start-coords)
                                                (sketch--circle-radius start-coords end-coords)))
                                ("ellipse" `(svg-ellipse ,@(sketch--ellipse-coords start-coords end-coords))))))
-    (apply (car command-and-coords) svg `(,@(cdr command-and-coords) ,@object-props))
-    (kill-backward-chars 1)
-    (insert-image (svg-image svg :pointer 'arrow :grid-param grid-param))))
+    (apply (car command-and-coords) svg-sketch `(,@(cdr command-and-coords) ,@object-props))
+    (sketch-redraw)))
 
 ;; (defun sketch-interactively (event)
 ;;   "Draw object interactively, interpreting mouse event."
