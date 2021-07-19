@@ -1,3 +1,51 @@
 #+TITLE: Sketch mode
+#+DESCRIPTION: Quickly create simple SVG sketches using the mouse
 
-* Welcome
+* Preliminary comment
+  This is a new package that is still in development. However, its main
+  functionality is very usable already. Any feedback is very welcome (probably
+  most suitable by opening an issue).
+
+  The =sketch-mode.el= start with listing
+  TODO items describing features that are missing from the package.
+  
+* Installation
+  When installing the package it probably still shows some warnings, you can
+  safely ignore them.
+  
+  Either =git clone= the package and load =sketch-mode.el= using =load file=
+  either manually or from =.emacs.d=.
+
+  Alternatively you could use a [[quelpa][https://github.com/quelpa/quelpa]] with the
+  following recipe:
+ #+begin_src emacs-lisp :tangle yes
+   (quelpa '(sketch-mode :repo "dalanicolai/sketch-mode" :fetcher github))
+ #+end_src 
+ then subsequently load the package with
+#+begin_src emacs-lisp :tangle yes
+  (use-package sketch-mode
+    :defer t)
+#+end_src  
+
+** Spacemacs
+  Add the following lines to =dotspacemacs-additional-packages=
+  
+#+begin_src emacs-lisp :tangle yes
+     (sketch-mode :location (recipe
+                        :fetcher github
+                        :repo "dalanicolai/sketch-mode"))
+#+end_src
+
+  Subsequently load the packages by adding the following line to =dotspacemacs/user-config=
+  
+ #+begin_src emacs-lisp
+  (use-package sketch-mode
+    :defer t)
+ #+end_src 
+
+* Usage
+  Start a sketch with =M-x sketch= and enter values at the prompts (or prefix
+  with =C-u= to use default values). Thanks to the =transient= package the usage
+  is more or less self explanatory.
+
+  Create your sketch and then save the file by pressing =S=.

@@ -203,7 +203,7 @@ values"
                (call-interactively 'sketch-transient))
       (let ((width (if arg (car sketch-default-image-size) (read-number "Enter width: ") ))
             (height (if arg 600 (read-number "Enter height: "))))
-        (switch-to-buffer (get-buffer-create "*sketch"))
+        (switch-to-buffer (get-buffer-create "*sketch*"))
         (defvar-local grid-param 25)
         (setq grid-param (if arg 25 (read-number "Enter grid parameter (enter 0 for no grid): ")))
         (sketch--create-canvas width height grid-param)))))
@@ -388,10 +388,11 @@ values"
                              (transient-arg-value "--fill-color=" args)
                              :marker-end (if args (pcase (transient-arg-value "--marker=" args)
                                                     ("arrow" "url(#arrow)")
-                                                    ("point" "url(#point)"))
+                                                    ("point" "url(#point)")
+                                                    (_ "none"))
                                            (if sketch-include-end-marker
                                                "url(#arrow)"
-                                             "none")              (_ "none"))))
+                                             "none"))))
          (command-and-coords (pcase (transient-arg-value "--object=" args)
                                ("line" (list 'svg-line
                                              (car start-coords) (cdr start-coords) (car end-coords) (cdr end-coords)))
