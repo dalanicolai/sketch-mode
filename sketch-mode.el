@@ -67,6 +67,10 @@ representing the image width and image height
   "When non-nil, show grid lines (default: t)."
   :type 'boolean)
 
+(defcustom sketch-show-labels nil
+  "When non-nil, show object labels (default: t)."
+  :type 'boolean)
+
 (defcustom sketch-default-grid-parameter 25
   "Default grid line separation distance (integer)."
   :type 'integer)
@@ -137,7 +141,9 @@ STOPS is a list of percentage/color pairs."
                                        (fill . ,(or color "black"))))))))))
 
 (define-minor-mode sketch-mode
-  "Create svg images using the mouse."
+  "Create svg images using the mouse.
+In sketch-mode buffer press \\[sketch-transient] to activate the
+transient."
   nil "sketch-mode"
   '(([drag-mouse-1] . sketch-interactively)
     ([C-S-drag-mouse-1] . sketch-interactively)
@@ -204,6 +210,7 @@ values"
       (let ((width (if arg (car sketch-default-image-size) (read-number "Enter width: ") ))
             (height (if arg 600 (read-number "Enter height: "))))
         (switch-to-buffer (get-buffer-create "*sketch*"))
+        (defvar-local sketch-elements nil)
         (defvar-local grid-param 25)
         (setq grid-param (if arg 25 (read-number "Enter grid parameter (enter 0 for no grid): ")))
         (sketch--create-canvas width height grid-param)))))
@@ -292,7 +299,7 @@ values"
                 (propertize (apply 'color-rgb-to-hex (color-name-to-rgb default))
                             'face 'transient-inactive-argument))))))
 
-(transient-define-prefix  sketch-transient ()
+(transient-define-prefix sketch-transient ()
   "Some Emacs magic"
   :transient-suffix     'transient--do-call
   :transient-non-suffix 'transient--do-stay
@@ -302,11 +309,14 @@ values"
     ("C" "fill-color" sketch-fill-color)]
    [("w" "stroke-width" sketch-stroke-width)]
    [("m" "end-marker" sketch-object-marker)]]
-  ["Snap-to-grid"
+  ["Grid"
    ("s" "Snap to grid" sketch-snap)
-   ("t" "Toggle grid" sketch-toggle-grid)]
+   ("g" "Toggle grid" sketch-toggle-grid)]
+  ["Labels"
+   ("l" "Toggle labels" sketch-toggle-labels)]
   ["Commands"
    [([drag-mouse-1] "Sketch"  sketch-interactively-1)
+    ("R" "Remove object" sketch-remove-object)
     ("u" "Undo" sketch-undo)
     ("r" "Redo" sketch-redo)]
    [("d" "Show definition" sketch-show-definition)
@@ -360,10 +370,55 @@ values"
   (setq sketch-show-grid (if sketch-show-grid nil t))
   (sketch-redraw))
 
+(defun sketch-labels ()
+  (interactive)
+  (let ((svg-labels (svg-create 100 100)))
+    (mapc (lambda (node)
+            (pcase (car node)
+              ('rect (svg-text svg-labels
+                               (dom-attr node 'id)
+                               :x (+ (dom-attr node 'x) 2)
+                               :y (+ (dom-attr node 'y)
+                                     (- (dom-attr node 'height) 2))
+                               :font-size 20
+                               :stroke "red"
+                               :fill "red"))
+              ('line (svg-text svg-labels
+                               (dom-attr node 'id)
+                               :x (dom-attr node 'x1)
+                               :y (dom-attr node 'y1)
+                               :font-size 20
+                               :stroke "red"
+                               :fill "red"))))
+        (cddr svg-sketch))
+    (cddr svg-labels)))
+
+(defun sketch-labels-list ()
+  (mapcar (lambda (node)
+            (dom-attr node 'id))
+          (cddr svg-sketch)))
+
+(defun sketch-create-label ()
+  (interactive)
+  (let* ((alphabet "abcdefghijklmnopqrstuvwxyz")
+         (labels-list (mapcar 'string (concat alphabet (upcase alphabet))))
+         (labels (sketch-labels-list)))
+    (while (member (car labels-list) labels)
+      (setq labels-list (cdr labels-list)))
+    (car labels-list)))
+
+(defun sketch-toggle-labels ()
+  (interactive)
+  (setq sketch-show-labels (if sketch-show-labels nil t))
+  (sketch-redraw))
+
 (defun sketch-redraw ()
   (unless sketch-mode
     (user-error "Not in sketch-mode buffer"))
-  (setq svg (append svg-canvas (when sketch-show-grid (cddr svg-grid)) (cddr svg-sketch)))
+  (setq svg (append svg-canvas
+                    (when sketch-show-grid (cddr svg-grid))
+                    (cddr svg-sketch)
+                    (when sketch-show-labels (sketch-labels))))
   (erase-buffer) ;; a (not exact) alternative is to use (kill-backward-chars 1)
   (insert-image (svg-image svg :pointer 'arrow :grid-param grid-param)))
 
@@ -401,9 +456,14 @@ values"
                                                (car start-coords) (cdr start-coords)
                                                (sketch--circle-radius start-coords end-coords)))
                                ("ellipse" `(svg-ellipse ,@(sketch--ellipse-coords start-coords end-coords))))))
-    (apply (car command-and-coords) svg-sketch `(,@(cdr command-and-coords) ,@object-props))
+    (apply (car command-and-coords) svg-sketch `(,@(cdr command-and-coords) ,@object-props :id ,(sketch-create-label)))
     (sketch-redraw)))
 
+(transient-define-suffix sketch-remove-object ()
+  (interactive)
+  (svg-remove svg-sketch (completing-read "Remove element with id: "
+                                          (sketch-labels-list)))
+  (sketch-redraw))
 ;; (defun sketch-interactively (event)
 ;;   "Draw object interactively, interpreting mouse event."
 ;;   (interactive "e")
