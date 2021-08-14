@@ -27,6 +27,22 @@
 ;;; Commentary:
 
 
+;; DONE add functionality to toggle grid
+
+;; DONE implement (simple) undo mechanism
+
+;; DONE add remove (objects) functionality (see `svg-remove')
+
+;; TODO add text objects
+
+;; TODO move font transient (also its suffix) into main sketch transient (suffix)
+
+;; TODO add functionality to crop/select part of image (on save)
+
+;; TODO add functionality to modify objects
+
+;; TODO enable defining global svg settings (object properties)
+
 ;; TODO maybe transform relevant transient argument (strings) to variables
 
 ;; TODO add function to open svg code in 'other buffer' and quickly reload
@@ -36,12 +52,6 @@
 ;; source block after each draw/edit
 
 ;; TODO maybe add keybindings (save/bind transient setting to specific 'mouse keys')
-
-;; DONE add functionality to toggle grid
-
-;; TODO implement undo mechanism
-
-;; TODO add remove (objects) functionality (see `svg-remove')
 
 ;; TODO add clipping fuctionality (see `svg-clip-path')
 
@@ -299,6 +309,106 @@ values"
                 (propertize (apply 'color-rgb-to-hex (color-name-to-rgb default))
                             'face 'transient-inactive-argument))))))
 
+(transient-define-prefix sketch-text ()
+  "Some Emacs magic"
+  :transient-suffix     'transient--do-call
+  :transient-non-suffix 'transient--do-stay
+  ["Font definitions"
+   [("f" "family" sketch-select-font)]
+   [("s" "stroke-color" sketch-font-size)
+    ("w" "fill-color" sketch-font-weight)]
+   ;; [("w" "stroke-width" sketch-stroke-width)]
+   [("m" "end-marker" sketch-object-marker)]]
+  ["Commands"
+   ([mouse-1] "Sketch"  sketch-text-interactively)]
+  [("q" "Quit"           transient-quit-one)])
+
+(transient-define-infix sketch-select-font ()
+  :description "Option with list"
+  :class 'transient-option
+  :argument "--family="
+  :choices (font-family-list))
+
+(transient-define-infix sketch-font-size ()
+  :description "Option with list"
+  :class 'transient-option
+  :argument "--font-size="
+  :choices (mapcar (lambda (x)
+                     (number-to-string x))
+                   (number-sequence 1 100)))
+
+(transient-define-infix sketch-font-weight ()
+  :description "Option with list"
+  :class 'sketch-variable:choices
+  :argument "--object="
+  :choices '("bold")
+  :default "normal")
+
+
+(transient-define-suffix sketch-text-interactively (event)
+  (interactive "@e")
+  (let* ((sketch-args (when transient-current-prefix (transient-args 'sketch-transient)))
+         (text-args (when transient-current-prefix (transient-args 'sketch-text)))
+         (start (event-start event))
+         (grid-param (plist-get (cdr (posn-image start)) :grid-param))
+         (snap (transient-arg-value "--snap-to-grid=" sketch-args))
+         (coords (if (or (not snap) (string= snap "nil"))
+                           (posn-object-x-y start)
+                         (sketch-snap-to-grid (posn-object-x-y start) grid-param)))
+         (text (read-string "Enter text: "))
+         (object-props (list :font-size
+                             (transient-arg-value "--font-size=" text-args)
+                             :font-weight
+                             (transient-arg-value "--font-weight=" text-args)
+                             )))
+                             ;; :fill
+                             ;; (transient-arg-value "--fill-color=" sketch-args)
+                             ;; :marker-end (if sketch-args (pcase (transient-arg-value "--marker=" sketch-args)
+                             ;;                        ("arrow" "url(#arrow)")
+                             ;;                        ("point" "url(#point)")
+                             ;;                        (_ "none"))
+                             ;;               (if sketch-include-end-marker
+                             ;;                   "url(#arrow)"
+                             ;;                 "none"))))
+    (apply 'svg-text svg-sketch text :x (car coords) :y (cdr coords) object-props))
+    (sketch-redraw))
+
+  ;; (let* ((args (when transient-current-prefix (transient-args 'sketch-transient)))
+  ;;        (print event))))
+    ;;      (start (event-start event))
+    ;;      (grid-param (plist-get (cdr (posn-image start)) :grid-param))
+    ;;      (snap (transient-arg-value "--snap-to-grid=" args))
+    ;;      (start-coords (if (or (not snap) (string= snap "nil"))
+    ;;                       (posn-object-x-y start)
+    ;;                     (sketch-snap-to-grid (posn-object-x-y start) grid-param)))
+    ;;      (end (event-end event))
+    ;;      (end-coords (if (or (not snap) (string= snap "nil"))
+    ;;                     (posn-object-x-y end)
+    ;;                   (sketch-snap-to-grid (posn-object-x-y end) grid-param)))
+    ;;      (object-props (list :stroke-width
+    ;;                          (transient-arg-value "--stroke-width=" args)
+    ;;                          :stroke
+    ;;                          (transient-arg-value "--stroke-color=" args)
+    ;;                          :fill
+    ;;                          (transient-arg-value "--fill-color=" args)
+    ;;                          :marker-end (if args (pcase (transient-arg-value "--marker=" args)
+    ;;                                                 ("arrow" "url(#arrow)")
+    ;;                                                 ("point" "url(#point)")
+    ;;                                                 (_ "none"))
+    ;;                                        (if sketch-include-end-marker
+    ;;                                            "url(#arrow)"
+    ;;                                          "none"))))
+    ;;      (command-and-coords (pcase (transient-arg-value "--object=" args)
+    ;;                            ("line" (list 'svg-line
+    ;;                                          (car start-coords) (cdr start-coords) (car end-coords) (cdr end-coords)))
+    ;;                            ("rectangle" `(svg-rectangle ,@(sketch--rectangle-coords start-coords end-coords)))
+    ;;                            ("circle" (list 'svg-circle
+    ;;                                            (car start-coords) (cdr start-coords)
+    ;;                                            (sketch--circle-radius start-coords end-coords)))
+    ;;                            ("ellipse" `(svg-ellipse ,@(sketch--ellipse-coords start-coords end-coords))))))
+    ;; (apply (car command-and-coords) svg-sketch `(,@(cdr command-and-coords) ,@object-props :id ,(sketch-create-label)))
+    ;; (sketch-redraw)))
+
 (transient-define-prefix sketch-transient ()
   "Some Emacs magic"
   :transient-suffix     'transient--do-call
@@ -309,6 +419,8 @@ values"
     ("C" "fill-color" sketch-fill-color)]
    [("w" "stroke-width" sketch-stroke-width)]
    [("m" "end-marker" sketch-object-marker)]]
+  ["Font"
+   ("f" "Add text" sketch-text)]
   ["Grid"
    ("s" "Snap to grid" sketch-snap)
    ("g" "Toggle grid" sketch-toggle-grid)]
