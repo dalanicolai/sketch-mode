@@ -154,11 +154,11 @@ STOPS is a list of percentage/color pairs."
   "Create svg images using the mouse.
 In sketch-mode buffer press \\[sketch-transient] to activate the
 transient."
-  nil "sketch-mode"
+  :lighter "sketch-mode"
+  :keymap
   '(([drag-mouse-1] . sketch-interactively)
-    ([C-S-drag-mouse-1] . sketch-interactively)
+    ;; ([C-S-drag-mouse-1] . sketch-interactively)
     ("" . sketch-transient)))
-
 
 (defun sketch--circle-radius (start-coords end-coords)
   (sqrt (+ (expt (- (car end-coords) (car start-coords)) 2)
@@ -309,70 +309,6 @@ values"
                 (propertize (apply 'color-rgb-to-hex (color-name-to-rgb default))
                             'face 'transient-inactive-argument))))))
 
-(transient-define-prefix sketch-text ()
-  "Some Emacs magic"
-  :transient-suffix     'transient--do-call
-  :transient-non-suffix 'transient--do-stay
-  ["Font definitions"
-   [("f" "family" sketch-select-font)]
-   [("s" "stroke-color" sketch-font-size)
-    ("w" "fill-color" sketch-font-weight)]
-   ;; [("w" "stroke-width" sketch-stroke-width)]
-   [("m" "end-marker" sketch-object-marker)]]
-  ["Commands"
-   ([mouse-1] "Sketch"  sketch-text-interactively)]
-  [("q" "Quit"           transient-quit-one)])
-
-(transient-define-infix sketch-select-font ()
-  :description "Option with list"
-  :class 'transient-option
-  :argument "--family="
-  :choices (font-family-list))
-
-(transient-define-infix sketch-font-size ()
-  :description "Option with list"
-  :class 'transient-option
-  :argument "--font-size="
-  :choices (mapcar (lambda (x)
-                     (number-to-string x))
-                   (number-sequence 1 100)))
-
-(transient-define-infix sketch-font-weight ()
-  :description "Option with list"
-  :class 'sketch-variable:choices
-  :argument "--object="
-  :choices '("bold")
-  :default "normal")
-
-
-(transient-define-suffix sketch-text-interactively (event)
-  (interactive "@e")
-  (let* ((sketch-args (when transient-current-prefix (transient-args 'sketch-transient)))
-         (text-args (when transient-current-prefix (transient-args 'sketch-text)))
-         (start (event-start event))
-         (grid-param (plist-get (cdr (posn-image start)) :grid-param))
-         (snap (transient-arg-value "--snap-to-grid=" sketch-args))
-         (coords (if (or (not snap) (string= snap "nil"))
-                           (posn-object-x-y start)
-                         (sketch-snap-to-grid (posn-object-x-y start) grid-param)))
-         (text (read-string "Enter text: "))
-         (object-props (list :font-size
-                             (transient-arg-value "--font-size=" text-args)
-                             :font-weight
-                             (transient-arg-value "--font-weight=" text-args)
-                             )))
-                             ;; :fill
-                             ;; (transient-arg-value "--fill-color=" sketch-args)
-                             ;; :marker-end (if sketch-args (pcase (transient-arg-value "--marker=" sketch-args)
-                             ;;                        ("arrow" "url(#arrow)")
-                             ;;                        ("point" "url(#point)")
-                             ;;                        (_ "none"))
-                             ;;               (if sketch-include-end-marker
-                             ;;                   "url(#arrow)"
-                             ;;                 "none"))))
-    (apply 'svg-text svg-sketch text :x (car coords) :y (cdr coords) object-props))
-    (sketch-redraw))
-
   ;; (let* ((args (when transient-current-prefix (transient-args 'sketch-transient)))
   ;;        (print event))))
     ;;      (start (event-start event))
@@ -413,22 +349,26 @@ values"
   "Some Emacs magic"
   :transient-suffix     'transient--do-call
   :transient-non-suffix 'transient--do-stay
+  [[("c" "stroke-color" sketch-stroke-color)
+    ("C" "fill-color" sketch-fill-color)]
+   [("w" "stroke-width" sketch-stroke-width)]]
   ["Object definitions"
    [("o" "object" sketch-object)]
-   [("c" "stroke-color" sketch-stroke-color)
-    ("C" "fill-color" sketch-fill-color)]
-   [("w" "stroke-width" sketch-stroke-width)]
    [("m" "end-marker" sketch-object-marker)]]
-  ["Font"
-   ("f" "Add text" sketch-text)]
+  ["Font definitions"
+   [("-f" "family" sketch-select-font)
+    ("-w" "font-weight" sketch-font-weight)]
+   [("-s" "font-size" sketch-font-size)]]
   ["Grid"
    ("s" "Snap to grid" sketch-snap)
    ("g" "Toggle grid" sketch-toggle-grid)]
   ["Labels"
    ("l" "Toggle labels" sketch-toggle-labels)]
   ["Commands"
-   [([drag-mouse-1] "Sketch"  sketch-interactively-1)
-    ("R" "Remove object" sketch-remove-object)
+   [([drag-mouse-1] "Draw object"  sketch-interactively-1)
+    ([mouse-1] "Draw text"  sketch-text-interactively)
+    ([C-S-drag-mouse-1] "Crop image" sketch-crop)]
+   [("R" "Remove object" sketch-remove-object)
     ("u" "Undo" sketch-undo)
     ("r" "Redo" sketch-redo)]
    [("d" "Show definition" sketch-show-definition)
@@ -524,6 +464,25 @@ values"
   (setq sketch-show-labels (if sketch-show-labels nil t))
   (sketch-redraw))
 
+(defun sketch-translate-node-coords (node amount &rest args)
+  (dolist (coord args node)
+    (cl-decf (alist-get coord (cadr node)) amount)))
+
+(defun svg-translate (dx dy)
+  (interactive)
+  (mapcar (lambda (node)
+            (pcase (car node)
+              ('line (sketch-translate-node-coords node dx 'x1 'x2)
+                     (sketch-translate-node-coords node dy 'y1 'y2))
+              ('rect (sketch-translate-node-coords node dx 'x)
+                     (sketch-translate-node-coords node dy 'y))
+              ((or 'circle 'ellipse)
+               (sketch-translate-node-coords node dx 'cx)
+               (sketch-translate-node-coords node dy 'cy))
+              ('text (sketch-translate-node-coords node dx 'x)
+                     (sketch-translate-node-coords node dy 'y))))
+          (cddr svg-sketch)))
+
 (defun sketch-redraw ()
   (unless sketch-mode
     (user-error "Not in sketch-mode buffer"))
@@ -611,17 +570,20 @@ values"
 (transient-define-suffix sketch-show-definition ()
   :transient 'transient--do-exit
   (interactive)
-  (let ((buffer (get-buffer-create "svg")))
+  (let ((buffer (get-buffer-create "svg"))
+        (sketch svg-sketch))
     (transient-quit-one)
-    (pp svg-sketch buffer)
     (switch-to-buffer-other-window buffer)
-    (emacs-lisp-mode)))
+    (erase-buffer)
+    (pp svg-sketch (current-buffer)))
+    (emacs-lisp-mode))
 
 (transient-define-suffix sketch-copy-definition ()
   (interactive)
   (with-temp-buffer
     (pp svg (current-buffer))
-    (kill-new (buffer-string))))
+    (kill-new (buffer-string)))
+  (message "SVG definition added to kill-ring"))
 
 (defun sketch-load-definition ()
   (interactive)
@@ -641,6 +603,75 @@ values"
     (push (pop sketch-undo-redo) sketch-reverse)
     (setq svg-sketch (nreverse sketch-reverse)))
   (sketch-redraw))
+
+(transient-define-suffix sketch-text-interactively (event)
+  (interactive "@e")
+  (let* ((sketch-args (when transient-current-prefix (transient-args 'sketch-transient)))
+         (start (event-start event))
+         (grid-param (plist-get (cdr (posn-image start)) :grid-param))
+         (snap (transient-arg-value "--snap-to-grid=" sketch-args))
+         (coords (if (or (not snap) (string= snap "nil"))
+                           (posn-object-x-y start)
+                         (sketch-snap-to-grid (posn-object-x-y start) grid-param)))
+         (text (read-string "Enter text: "))
+         (object-props (list :font-size
+                             (transient-arg-value "--font-size=" sketch-args)
+                             :font-weight
+                             (transient-arg-value "--font-weight=" sketch-args)
+                             )))
+                             ;; :fill
+                             ;; (transient-arg-value "--fill-color=" sketch-args)
+                             ;; :marker-end (if sketch-args (pcase (transient-arg-value "--marker=" sketch-args)
+                             ;;                        ("arrow" "url(#arrow)")
+                             ;;                        ("point" "url(#point)")
+                             ;;                        (_ "none"))
+                             ;;               (if sketch-include-end-marker
+                             ;;                   "url(#arrow)"
+                             ;;                 "none"))))
+    (apply 'svg-text svg-sketch text :x (car coords) :y (cdr coords) object-props))
+    (sketch-redraw))
+
+(transient-define-infix sketch-select-font ()
+  :description "Option with list"
+  :class 'transient-option
+  :argument "--family="
+  :choices (font-family-list))
+
+(transient-define-infix sketch-font-size ()
+  :description "Option with list"
+  :class 'transient-option
+  :argument "--font-size="
+  :choices (mapcar (lambda (x)
+                     (number-to-string x))
+                   (number-sequence 1 100)))
+
+(transient-define-infix sketch-font-weight ()
+  :description "Option with list"
+  :class 'sketch-variable:choices
+  :argument "--font-weight="
+  :choices '("bold")
+  :default "normal")
+
+(transient-define-suffix sketch-crop (event)
+  (interactive "@e")
+  (let* ((args (when transient-current-prefix (transient-args 'sketch-transient)))
+         (start (event-start event))
+         (grid-param (plist-get (cdr (posn-image start)) :grid-param))
+         (snap (transient-arg-value "--snap-to-grid=" args))
+         (start-coords (if (or (not snap) (string= snap "nil"))
+                           (posn-object-x-y start)
+                         (sketch-snap-to-grid (posn-object-x-y start) grid-param)))
+         (end (event-end event))
+         (end-coords (if (or (not snap) (string= snap "nil"))
+                         (posn-object-x-y end)
+                       (sketch-snap-to-grid (posn-object-x-y end) grid-param)))
+         (new-width (abs (- (car end-coords) (car start-coords))))
+         (new-height (abs (- (cdr end-coords) (cdr start-coords)))))
+    (setq svg-canvas (svg-create new-width new-height :stroke "gray"))
+    (svg-marker svg-canvas "arrow" 8 8 "black" t)
+    (svg-rectangle svg-canvas 0 0 new-width new-height :fill "white")
+    (setf (cddr svg-sketch) (svg-translate (car start-coords) (cdr start-coords)))
+    (sketch-redraw)))
 
 (transient-define-suffix sketch-save ()
   (interactive)
