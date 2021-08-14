@@ -49,3 +49,29 @@
   is more or less self explanatory.
 
   Create your sketch and then save the file by pressing =S=.
+
+* Sponsor the project
+  Due to a combination of unfortunate circumstances, I am in an unfortunate
+  financial situation (dependent on my family), while I would love to get a
+  modest income. As you can see from my [projects page][link to be inserted]
+  this is not because I don't do (I hope useful) work. It is just that I don't
+  get paid, nor receive any allowance, for writing free software while working
+  on a thesis. Anyway, although I really prefer to make software available to
+  anyone who would like to use it (I know quite well the frustration of
+  "financial exclusion"), I would be very happy with a donation from users who
+  enjoy 'my' packages, and can easily afford it (e.g. by using the packages for
+  their work). Of course, if you'd like to see this package (or any of my other
+  packages) get developed further you could also consider to become a sponsor (I
+  have no experience with this kind of business, but I guess it starts with
+  letting users know about it).
+
+  Accepted donation methods
+  [[https://en.liberapay.com/dalanicolai/][liberapay]]
+  [[https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=6BHLS7H9ARJXE&source=url][PayPal donate]]
+
+# <form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_top">
+# <input type="hidden" name="cmd" value="_s-xclick" />
+# <input type="hidden" name="hosted_button_id" value="6BHLS7H9ARJXE" />
+# <input type="image" src="https://www.paypalobjects.com/en_US/NL/i/btn/btn_donateCC_LG.gif" border="0" name="submit" title="PayPal - The safer, easier way to pay online!" alt="Donate with PayPal button" />
+# <img alt="" border="0" src="https://www.paypal.com/en_NL/i/scr/pixel.gif" width="1" height="1" />
+# </form>
