@@ -3,12 +3,34 @@
 
 * Preliminary comment
   This is a new package that is still in development. However, its main
-  functionality is very usable already. Any feedback is very welcome (probably
-  most suitable by opening an issue).
+  functionality is very usable already. Any feedback, for example suggestions
+  for enhancing the interface/usability, is very welcome (probably best by
+  opening an issue). Also, any contributions are very welcome. The code of the
+  package is very accessible (especially if you quickly read how to use [[https://www.gnu.org/software/emacs/manual/html_node/elisp/Edebug.html][edebug]].
 
-  The =sketch-mode.el= start with listing
-  TODO items describing features that are missing from the package.
-  
+** Included features
+   - snap to grid
+   - draw text
+   - crop finale image
+   - set stroke, fill, width etc.
+   - show dom (lisp) in other window
+   - draw angle arcs (between lines, available soon)
+   - save drawing presets using [[https://magit.vc/manual/transient.html#Saving-Values][transient's saving values feature]] (documentation
+     contribution welcome)
+     
+** Delicious low hanging fruit
+   - use svg snippets (i.e. design object in external programs like inkscape,
+     geogebra etc., end quickly insert them in your sketches)
+   - export to tikz, asymptote, other image extensions etc.
+
+** Less low hanging fruit
+   - draw directly in you literate org file, with the dom updated in your source block
+     
+  The =sketch-mode.el= file starts with listing TODO items describing features
+  that are missing from the package.
+
+  [[./happy-sketching.gif]]
+
 * Installation
   When installing the package it probably still shows some warnings, you can
   safely ignore them.
@@ -45,16 +67,33 @@
 
 * Usage
   Start a sketch with =M-x sketch= and enter values at the prompts (or prefix
-  with =C-u= to use default values). Thanks to the =transient= package the usage
-  is more or less self explanatory.
+  with =C-u= to use default values). Although, thanks to the =transient=
+  package, the usage is more or less self explanatory, it is wise to take note
+  of the following comments:
 
-  Create your sketch and then save the file by pressing =S=.
+  - the undo/redo functionality is really basic, and does not work for all actions
+    (e.g. does not work yet when removing object or cropping images).
+  - to remove an object (without using undo), you should toggle labels by
+    pressing =l=, and then to remove an object enter its label after pressing
+    =R=.
+  - You can hide the transient by pressing =q=, and you can go back to sketch
+    mode via =M-x sketch= (or =C-c C-t= when still in the sketch-mode buffer)
+
+  Create your sketch and then save
+  the file by pressing =S=.
 
 * Sponsor the project
   Due to a combination of unfortunate circumstances, I am in an unfortunate
-  financial situation (dependent on my family), therefore if you find [[my
+  financial situation (dependent on my family, in the Netherlands we would say:
+  I have no penny to scratch my butt), therefore if you find [[my
   package(s)]][project page link to be inserted] useful, and if you can afford it,
   then I would be very happy with any small (or less small) donation.
+  As soon as I have the opportunity/possibility to find a real job, I will
+  happily suggest you to transfer donate to other projects/charity.
+
+  If you would like to =boost= development of any of my projects, then
+  contribute (code or documentation), or consider more sustainable financial
+  support (i.e. sponsor).
 
   Accepted donation methods
   [[https://en.liberapay.com/dalanicolai/][liberapay]]

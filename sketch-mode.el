@@ -33,11 +33,9 @@
 
 ;; DONE add remove (objects) functionality (see `svg-remove')
 
-;; TODO add text objects
+;; DONE move font transient (also its suffix) into main sketch transient (suffix)
 
-;; TODO move font transient (also its suffix) into main sketch transient (suffix)
-
-;; TODO add functionality to crop/select part of image (on save)
+;; DONE add functionality to crop/select part of image (on/before save)
 
 ;; TODO add functionality to modify objects
 
@@ -54,6 +52,16 @@
 ;; TODO maybe add keybindings (save/bind transient setting to specific 'mouse keys')
 
 ;; TODO add clipping fuctionality (see `svg-clip-path')
+
+;; TODO create function to insert svg snippets (so you could design objects in
+;; advanced software and use them quickly here in your sketches)
+
+;; TODO create function to save snippets
+
+;; TODO implement modularity. i.e. create 'layers' via svg groups <g> (related
+;; to snippet functionality)
+
+;; TODO create zoom functionality
 
 ;; NOTE this is a most straightforward sketch-mode. A more advanced/general version
 ;; could implement a drawing DSL based on nodes (a la tikz/asymptote etc.)
