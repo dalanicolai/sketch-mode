@@ -67,6 +67,14 @@
 (defgroup sketch nil
   "Configure default sketch (object) properties.")
 
+(defcustom sketch-im-x-offset 7
+  "Default grid line separation distance (integer)."
+  :type 'integer)
+
+(defcustom sketch-im-y-offset 1
+  "Default grid line separation distance (integer)."
+  :type 'integer)
+
 (defcustom sketch-default-image-size '(800 . 600)
   "Default size for sketch canvas.
 Cons cell with car and cdr both integers, respectively
@@ -157,7 +165,7 @@ In sketch-mode buffer press \\[sketch-transient] to activate the
 transient."
   :lighter "sketch-mode"
   :keymap
-  '(([drag-mouse-1] . sketch-interactively)
+  '(([sketch drag-mouse-1] . sketch-interactively)
     ;; ([C-S-drag-mouse-1] . sketch-interactively)
     ("" . sketch-transient)))
 
@@ -203,7 +211,17 @@ transient."
              (svg-line svg-grid 0 pos width pos :stroke-dasharray (when dash "2,4"))
              (setq dash (if dash nil t)))))
        (setq svg (append svg-canvas (when sketch-show-grid (cddr svg-grid))))
-       (svg-image svg :pointer 'arrow :grid-param grid-param)))
+       (svg-image svg
+                  :grid-param grid-param
+                  :pointer 'arrow
+                  :map `(((rect . ((0 . 0) . (,(dom-attr svg 'width) . ,(dom-attr svg 'height))))
+                          ;; :map '(((rect . ((0 . 0) . (800 . 600)))
+                          sketch
+                          (pointer arrow help-echo (lambda (_ _ pos)
+                                                     (let ((coords (cdr (mouse-pixel-position))))
+                                                       (print (format "(%s, %s)"
+                                                                      (- (car coords) sketch-im-x-offset)
+                                                                      (+ (cdr coords) sketch-im-y-offset)))))))))))
     (sketch-mode)
     (call-interactively 'sketch-transient)
     (setq svg-sketch (svg-create width height)))
@@ -366,9 +384,9 @@ values"
   ["Labels"
    ("l" "Toggle labels" sketch-toggle-labels)]
   ["Commands"
-   [([drag-mouse-1] "Draw object"  sketch-interactively-1)
-    ([mouse-1] "Draw text"  sketch-text-interactively)
-    ([C-S-drag-mouse-1] "Crop image" sketch-crop)]
+   [([sketch drag-mouse-1] "Draw object"  sketch-interactively-1)
+    ([sketch mouse-1] "Draw text"  sketch-text-interactively)
+    ([sketch C-S-drag-mouse-1] "Crop image" sketch-crop)]
    [("R" "Remove object" sketch-remove-object)
     ("u" "Undo" sketch-undo)
     ("r" "Redo" sketch-redo)]
@@ -492,44 +510,55 @@ values"
                     (cddr svg-sketch)
                     (when sketch-show-labels (sketch-labels))))
   (erase-buffer) ;; a (not exact) alternative is to use (kill-backward-chars 1)
-  (insert-image (svg-image svg :pointer 'arrow :grid-param grid-param)))
+  (insert-image (svg-image svg
+                           :pointer 'arrow
+                           :grid-param grid-param
+                           :map `(((rect . ((0 . 0) . (,(dom-attr svg 'width) . ,(dom-attr svg 'height))))
+                           ;; :map '(((rect . ((0 . 0) . (800 . 600)))
+                                   sketch
+                                   (pointer arrow help-echo (lambda (_ _ pos)
+                                                              (let ((coords (mouse-pixel-position)))
+                                                                (print (format "(%s, %s)"
+                                                                               (- (cadr coords) pos)
+                                                                               (cddr coords)))))))))))
 
 (transient-define-suffix sketch-interactively-1 (event)
   (interactive "@e")
   (let* ((args (when transient-current-prefix (transient-args 'sketch-transient)))
          (start (event-start event))
-         (grid-param (plist-get (cdr (posn-image start)) :grid-param))
-         (snap (transient-arg-value "--snap-to-grid=" args))
-         (start-coords (if (or (not snap) (string= snap "nil"))
-                          (posn-object-x-y start)
-                        (sketch-snap-to-grid (posn-object-x-y start) grid-param)))
-         (end (event-end event))
-         (end-coords (if (or (not snap) (string= snap "nil"))
-                        (posn-object-x-y end)
-                      (sketch-snap-to-grid (posn-object-x-y end) grid-param)))
-         (object-props (list :stroke-width
-                             (transient-arg-value "--stroke-width=" args)
-                             :stroke
-                             (transient-arg-value "--stroke-color=" args)
-                             :fill
-                             (transient-arg-value "--fill-color=" args)
-                             :marker-end (if args (pcase (transient-arg-value "--marker=" args)
-                                                    ("arrow" "url(#arrow)")
-                                                    ("point" "url(#point)")
-                                                    (_ "none"))
-                                           (if sketch-include-end-marker
-                                               "url(#arrow)"
-                                             "none"))))
-         (command-and-coords (pcase (transient-arg-value "--object=" args)
-                               ("line" (list 'svg-line
-                                             (car start-coords) (cdr start-coords) (car end-coords) (cdr end-coords)))
-                               ("rectangle" `(svg-rectangle ,@(sketch--rectangle-coords start-coords end-coords)))
-                               ("circle" (list 'svg-circle
-                                               (car start-coords) (cdr start-coords)
-                                               (sketch--circle-radius start-coords end-coords)))
-                               ("ellipse" `(svg-ellipse ,@(sketch--ellipse-coords start-coords end-coords))))))
-    (apply (car command-and-coords) svg-sketch `(,@(cdr command-and-coords) ,@object-props :id ,(sketch-create-label)))
-    (sketch-redraw)))
+         (print start))))
+    ;;      (grid-param (plist-get (cdr (posn-image start)) :grid-param))
+    ;;      (snap (transient-arg-value "--snap-to-grid=" args))
+    ;;      (start-coords (if (or (not snap) (string= snap "nil"))
+    ;;                       (posn-object-x-y start)
+    ;;                     (sketch-snap-to-grid (posn-object-x-y start) grid-param)))
+    ;;      (end (event-end event))
+    ;;      (end-coords (if (or (not snap) (string= snap "nil"))
+    ;;                     (posn-object-x-y end)
+    ;;                   (sketch-snap-to-grid (posn-object-x-y end) grid-param)))
+    ;;      (object-props (list :stroke-width
+    ;;                          (transient-arg-value "--stroke-width=" args)
+    ;;                          :stroke
+    ;;                          (transient-arg-value "--stroke-color=" args)
+    ;;                          :fill
+    ;;                          (transient-arg-value "--fill-color=" args)
+    ;;                          :marker-end (if args (pcase (transient-arg-value "--marker=" args)
+    ;;                                                 ("arrow" "url(#arrow)")
+    ;;                                                 ("point" "url(#point)")
+    ;;                                                 (_ "none"))
+    ;;                                        (if sketch-include-end-marker
+    ;;                                            "url(#arrow)"
+    ;;                                          "none"))))
+    ;;      (command-and-coords (pcase (transient-arg-value "--object=" args)
+    ;;                            ("line" (list 'svg-line
+    ;;                                          (car start-coords) (cdr start-coords) (car end-coords) (cdr end-coords)))
+    ;;                            ("rectangle" `(svg-rectangle ,@(sketch--rectangle-coords start-coords end-coords)))
+    ;;                            ("circle" (list 'svg-circle
+    ;;                                            (car start-coords) (cdr start-coords)
+    ;;                                            (sketch--circle-radius start-coords end-coords)))
+    ;;                            ("ellipse" `(svg-ellipse ,@(sketch--ellipse-coords start-coords end-coords))))))
+    ;; (apply (car command-and-coords) svg-sketch `(,@(cdr command-and-coords) ,@object-props :id ,(sketch-create-label)))
+    ;; (sketch-redraw)))
 
 (transient-define-suffix sketch-remove-object ()
   (interactive)
