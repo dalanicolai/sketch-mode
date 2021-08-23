@@ -158,6 +158,17 @@ STOPS is a list of percentage/color pairs."
                                        (r . 5)
                                        (fill . ,(or color "black"))))))))))
 
+(defun svg-group (&rest args)
+  (apply #'dom-node
+         'g
+         `(,(svg--arguments nil args))))
+
+(defun sketch-group (id &rest args)
+  (apply #'svg-group
+         :id id
+         :transform "translate(0 0)"
+         args))
+
 (define-minor-mode sketch-mode
   "Create svg images using the mouse.
 In sketch-mode buffer press \\[sketch-transient] to activate the
@@ -189,31 +200,31 @@ transient."
 (defun sketch--create-canvas (width height &optional grid-param)
   "Create canvas for drawing svg using the mouse."
   (defvar svg)
-  (defvar svg-canvas)
-  (defvar svg-grid)
-  (defvar svg-sketch)
-    (insert-image
-     (let ((width width)
-           (height height))
-       (setq svg-canvas (svg-create width height :stroke "gray"))
-       (svg-marker svg-canvas "arrow" 8 8 "black" t)
-       (svg-rectangle svg-canvas 0 0 width height :fill "white")
-       (setq svg-grid (svg-create width height))
-       (let ((dash t))
-         (dotimes (x (1- (/ width grid-param)))
-           (let ((pos (* (1+ x) grid-param)))
-             (svg-line svg-grid pos 0 pos height :stroke-dasharray (when dash "2,4"))
-             (setq dash (if dash nil t)))))
-       (let ((dash t))
-         (dotimes (x (1- (/ height grid-param)))
-           (let ((pos (* (1+ x) grid-param)))
-             (svg-line svg-grid 0 pos width pos :stroke-dasharray (when dash "2,4"))
-             (setq dash (if dash nil t)))))
-       (setq svg (append svg-canvas (when sketch-show-grid (cddr svg-grid))))
-       (svg-image svg :pointer 'arrow :grid-param grid-param)))
-    (sketch-mode)
-    (call-interactively 'sketch-transient)
-    (setq svg-sketch (svg-create width height)))
+  (defvar-local svg-canvas nil)
+  (defvar-local svg-grid nil)
+  (defvar-local svg-sketch nil)
+  (insert-image
+   (let ((width width)
+         (height height))
+     (setq svg-canvas (svg-create width height :stroke "gray"))
+     (svg-marker svg-canvas "arrow" 8 8 "black" t)
+     (svg-rectangle svg-canvas 0 0 width height :fill "white")
+     (setq svg-grid (svg-create width height))
+     (let ((dash t))
+       (dotimes (x (1- (/ width grid-param)))
+         (let ((pos (* (1+ x) grid-param)))
+           (svg-line svg-grid pos 0 pos height :stroke-dasharray (when dash "2,4"))
+           (setq dash (if dash nil t)))))
+     (let ((dash t))
+       (dotimes (x (1- (/ height grid-param)))
+         (let ((pos (* (1+ x) grid-param)))
+           (svg-line svg-grid 0 pos width pos :stroke-dasharray (when dash "2,4"))
+           (setq dash (if dash nil t)))))
+     (setq svg (append svg-canvas (when sketch-show-grid (cddr svg-grid))))
+     (svg-image svg :pointer 'arrow :grid-param grid-param)))
+  (sketch-mode)
+  (call-interactively 'sketch-transient)
+  (setq svg-sketch (sketch-group "main")))
 
 ;;;###autoload
 (defun sketch (arg)
@@ -432,7 +443,7 @@ values"
 
 (defun sketch-labels ()
   (interactive)
-  (let ((svg-labels (svg-create 100 100)))
+  (let ((svg-labels (sketch-group "labels")))
     (mapc (lambda (node)
             (pcase (car node)
               ('rect (svg-text svg-labels
@@ -451,7 +462,7 @@ values"
                                :stroke "red"
                                :fill "red"))))
         (cddr svg-sketch))
-    (cddr svg-labels)))
+    svg-labels))
 
 (defun sketch-labels-list ()
   (mapcar (lambda (node)
@@ -476,28 +487,31 @@ values"
   (dolist (coord args node)
     (cl-decf (alist-get coord (cadr node)) amount)))
 
-(defun svg-translate (dx dy)
+(defun svg-translate (label dx dy)
   (interactive)
-  (mapcar (lambda (node)
-            (pcase (car node)
-              ('line (sketch-translate-node-coords node dx 'x1 'x2)
-                     (sketch-translate-node-coords node dy 'y1 'y2))
-              ('rect (sketch-translate-node-coords node dx 'x)
-                     (sketch-translate-node-coords node dy 'y))
-              ((or 'circle 'ellipse)
-               (sketch-translate-node-coords node dx 'cx)
-               (sketch-translate-node-coords node dy 'cy))
-              ('text (sketch-translate-node-coords node dx 'x)
-                     (sketch-translate-node-coords node dy 'y))))
-          (cddr svg-sketch)))
+  (let ((node (car (dom-by-id svg-sketch label))))
+    (pcase (car node)
+      ('g (setf (alist-get 'transform (cadr node))
+                (format "translate(%s %s)" (- dx) (- dy))))
+      ;; ('line (sketch-translate-node-coords node dx 'x1 'x2)
+      ;;        (sketch-translate-node-coords node dy 'y1 'y2))
+      ;; ('rect (sketch-translate-node-coords node dx 'x)
+      ;;        (sketch-translate-node-coords node dy 'y))
+      ;; ((or 'circle 'ellipse)
+      ;;  (sketch-translate-node-coords node dx 'cx)
+      ;;  (sketch-translate-node-coords node dy 'cy))
+      ;; ('text (sketch-translate-node-coords node dx 'x)
+      ;;        (sketch-translate-node-coords node dy 'y)))
+
+      ) ;; TODO make it work for all types of elements
+    node))
 
 (defun sketch-redraw ()
   (unless sketch-mode
     (user-error "Not in sketch-mode buffer"))
-  (setq svg (append svg-canvas
-                    (when sketch-show-grid (cddr svg-grid))
-                    (cddr svg-sketch)
-                    (when sketch-show-labels (sketch-labels))))
+  (setq svg (append svg-canvas (when sketch-show-grid (cddr svg-grid))))
+  (dom-append-child svg svg-sketch)
+           ;; (when sketch-show-labels (sketch-labels))))
   (erase-buffer) ;; a (not exact) alternative is to use (kill-backward-chars 1)
   (insert-image (svg-image svg :pointer 'arrow :grid-param grid-param)))
 
@@ -579,11 +593,11 @@ values"
   :transient 'transient--do-exit
   (interactive)
   (let ((buffer (get-buffer-create "svg"))
-        (sketch svg-sketch))
+        (sketch svg-sketch)) ;; svg-sketch buffer local in sketch buffer
     (transient-quit-one)
     (switch-to-buffer-other-window buffer)
     (erase-buffer)
-    (pp svg-sketch (current-buffer)))
+    (pp sketch (current-buffer)))
     (emacs-lisp-mode))
 
 (transient-define-suffix sketch-copy-definition ()
@@ -599,7 +613,7 @@ values"
 
 (transient-define-suffix sketch-undo ()
   (interactive)
-  (defvar sketch-undo-redo nil)
+  (defvar-local sketch-undo-redo nil)
   (let ((sketch-reverse (nreverse svg-sketch)))
     (push (pop sketch-reverse) sketch-undo-redo)
     (setq svg-sketch (nreverse sketch-reverse)))
@@ -678,7 +692,7 @@ values"
     (setq svg-canvas (svg-create new-width new-height :stroke "gray"))
     (svg-marker svg-canvas "arrow" 8 8 "black" t)
     (svg-rectangle svg-canvas 0 0 new-width new-height :fill "white")
-    (setf (cddr svg-sketch) (svg-translate (car start-coords) (cdr start-coords)))
+    (setq svg-sketch (svg-translate "main" (car start-coords) (cdr start-coords)))
     (sketch-redraw)))
 
 (transient-define-suffix sketch-save ()
