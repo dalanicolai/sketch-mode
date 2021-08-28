@@ -350,21 +350,22 @@ values"
   "Some Emacs magic"
   :transient-suffix     'transient--do-call
   :transient-non-suffix 'transient--do-stay
-  [[("c" "stroke-color" sketch-stroke-color)
-    ("C" "fill-color" sketch-fill-color)]
-   [("w" "stroke-width" sketch-stroke-width)]]
-  ["Object definitions"
-   [("o" "object" sketch-object)]
-   [("m" "end-marker" sketch-object-marker)]]
-  ["Font definitions"
-   [("-f" "family" sketch-select-font)
-    ("-w" "font-weight" sketch-font-weight)]
-   [("-s" "font-size" sketch-font-size)]]
-  ["Grid"
-   ("s" "Snap to grid" sketch-snap)
-   ("g" "Toggle grid" sketch-toggle-grid)]
-  ["Labels"
-   ("l" "Toggle labels" sketch-toggle-labels)]
+  [["General definitions"
+    ("c" "stroke-color" sketch-stroke-color)
+    ("C" "fill-color" sketch-fill-color)
+    ("w" "stroke-width" sketch-stroke-width)]
+   ["Object definitions"
+    ("o" "object" sketch-object)
+    ("m" "end-marker" sketch-object-marker)]
+   ["Font definitions"
+    ("-f" "family" sketch-select-font)
+    ("-w" "font-weight" sketch-font-weight)
+    ("-s" "font-size" sketch-font-size)]
+   ["Grid"
+    ("s" "Snap to grid" sketch-snap)
+    ("g" "Toggle grid" sketch-toggle-grid)]
+   ["Labels"
+    ("l" "Toggle labels" sketch-toggle-labels)]]
   ["Commands"
    [([drag-mouse-1] "Draw object"  sketch-interactively-1)
     ([mouse-1] "Draw text"  sketch-text-interactively)
