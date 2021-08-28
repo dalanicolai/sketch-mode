@@ -6,21 +6,56 @@
 
 ;; (insert-image (svg-image (append svg-scratch (nthcdr 2 svg-labels))))
 
-(defun sketch-translate-node-coords (node amount &rest args)
-  (dolist (coord args node)
-    (cl-decf (alist-get coord (cadr node)) amount)))
+(defun sketch-modify-line-entry (node)
+  (let* ((props (copy-alist (cadr node)))
+         (id (alist-get 'id props)))
+    (assq-delete-all 'id props)
+    (vconcat [("id" 4 t)]
+             (map 'vector (lambda (prop)
+                            ;; (let* ((key (car prop))
+                            ;;        (val (cdr prop))
+                            ;;        (length (when (stringp val)
+                            ;;                  (length val))))
+                            (list (symbol-name (car prop))
+                                  (pcase (car prop)
+                                    ((or 'x1 'y1 'x2 'y2) 5)
+                                    ('marker-end 7)
+                                    ('fill 18)
+                                    ('stroke 18)
+                                    (_ 10))
+                                  t))
+                  props))))
 
-(defun svg-translate (dx dy)
+(define-derived-mode sketch-modify-mode tabulated-list-mode "sketch-modify"
+  (setq tabulated-list-format (sketch-modify-line-entry (car (dom-by-id svg "^a$"))))
+  (let* ((props (copy-alist (cadar (dom-by-id svg "^a$"))))
+         (id (alist-get 'id props)))
+    (assq-delete-all 'id props)
+    (setq tabulated-list-entries(list
+                                 (list
+                                  nil
+                                  (vconcat (vector id)
+                                           (map 'vector (lambda (prop) (let ((val (cdr prop)))
+                                                                         (if (stringp val)
+                                                                             val
+                                                                           (number-to-string val))))
+                                                props)))))
+    (tabulated-list-print)))
+
+(defun sketch-translate-down ()
   (interactive)
-  (mapcar (lambda (node)
-            (pcase (car node)
-              ('line (sketch-translate-node-coords node dx 'x1 'x2)
-                     (sketch-translate-node-coords node dx 'y1 'y2))
-              ('rect (sketch-translate-node-coords node dx 'x)
-                            (sketch-translate-node-coords node dx 'y))
-              ((or 'circle 'ellipse)
-               (sketch-translate-node-coords node dx 'cx)
-               (sketch-translate-node-coords node dx 'cy))
-              ('text (sketch-translate-node-coords node dx 'x)
-                     (sketch-translate-node-coords node dx 'y))))
-          (cddr svg-sketch)))
+  (let* ((props (cadar (dom-by-id svg "^a$"))))
+    (dolist (coord '(y1 y2))
+      (cl-incf (alist-get coord props) 10)))
+  (sketch-redraw))
+
+(transient-define-prefix sketch-modify-object ()
+  "Set object properties."
+  :transient-suffix     'transient--do-call
+  ["Properties"
+   [("x1" "author" "author=")
+    ("y" "year" "year=")]]
+  [("<down>" "Down" sketch-translate-down)
+   ("q" "Quit" transient-quit-one)])
+  ;; (interactive)
+  ;; (djvu-switch-shared))
