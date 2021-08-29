@@ -16,6 +16,9 @@
 ;; (defun sketch-adavanced-create-label ()
 (let* ((objects-list '((g . 1)))
        ()
-  (member '(g . 1) test-list))
+  (member '(g . 1) test-list)))
 
   (dom-by-id gg)
+
+(defun sketch-add-layer ()
+  (push (sketch-group (format "layer-%s" (length svg-layers))) svg-layers))

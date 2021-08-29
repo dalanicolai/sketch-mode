@@ -203,6 +203,7 @@ transient."
   (defvar-local svg-canvas nil)
   (defvar-local svg-grid nil)
   (defvar-local svg-sketch nil)
+  (defvar-local svg-layers nil)
   (insert-image
    (let ((width width)
          (height height))
@@ -383,7 +384,9 @@ values"
     ("s" "Snap to grid" sketch-snap)
     ("g" "Toggle grid" sketch-toggle-grid)]
    ["Labels"
-    ("l" "Toggle labels" sketch-toggle-labels)]]
+    ("l" "Toggle labels" sketch-toggle-labels)]
+   ["Layers"
+    ("a" "Active layer" sketch-layer)]]
   ["Commands"
    [([drag-mouse-1] "Draw object"  sketch-interactively-1)
     ([mouse-1] "Draw text"  sketch-text-interactively)
@@ -483,6 +486,16 @@ values"
   (interactive)
   (setq sketch-show-labels (if sketch-show-labels nil t))
   (sketch-redraw))
+
+(transient-define-infix sketch-layer ()
+  :description "Option with list"
+  :class 'sketch-variable:choices
+  :argument "--layer="
+  :choices (sketch-list-layers)
+  :default "layer-0")
+
+(defun sketch-list-layers ()
+  (mapcar (lambda (layer) (alist-get 'id (cadr layer))) svg-layers))
 
 (defun sketch-translate-node-coords (node amount &rest args)
   (dolist (coord args node)
