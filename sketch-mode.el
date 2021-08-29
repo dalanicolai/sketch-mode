@@ -393,8 +393,8 @@ values"
     ("r" "Redo" sketch-redo)]
    [("d" "Show definition" sketch-show-definition)
     ("D" "Copy definition" sketch-copy-definition)
-    ("S" "Save image" sketch-save)]]
-  [("q" "Quit"           transient-quit-one)])
+    ("S" "Save image" sketch-save)]
+   [("q" "Quit"           transient-quit-one)]])
 
 (transient-define-infix sketch-object ()
   :description "Option with list"
