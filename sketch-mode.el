@@ -218,7 +218,8 @@ transient."
                           ;; :map '(((rect . ((0 . 0) . (800 . 600)))
                           sketch
                           (pointer arrow help-echo (lambda (_ _ pos)
-                                                     (let ((coords (cdr (mouse-pixel-position))))
+                                                     (let ((message-log-max nil)
+                                                           (coords (cdr (mouse-pixel-position))))
                                                        (print (format "(%s, %s)"
                                                                       (- (car coords) sketch-im-x-offset)
                                                                       (+ (cdr coords) sketch-im-y-offset)))))))))))
@@ -518,7 +519,8 @@ values"
                            ;; :map '(((rect . ((0 . 0) . (800 . 600)))
                                    sketch
                                    (pointer arrow help-echo (lambda (_ _ pos)
-                                                              (let ((coords (mouse-pixel-position)))
+                                                              (let ((message-log-max nil)
+                                                                    (coords (mouse-pixel-position)))
                                                                 (print (format "(%s, %s)"
                                                                                (- (cadr coords) pos)
                                                                                (cddr coords)))))))))))
