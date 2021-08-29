@@ -204,12 +204,13 @@ transient."
   (defvar-local svg-grid nil)
   (defvar-local svg-sketch nil)
   (defvar-local svg-layers nil)
+  (defvar-local show-layers '(0))
   (insert-image
    (let ((width width)
          (height height))
      (setq svg-canvas (svg-create width height :stroke "gray"))
      (svg-marker svg-canvas "arrow" 8 8 "black" t)
-     (svg-rectangle svg-canvas 0 0 width height :fill "white")
+     (svg-rectangle svg-canvas 0 0 "100%" "100%" :fill "white")
      (setq svg-grid (svg-create width height))
      (let ((dash t))
        (dotimes (x (1- (/ width grid-param)))
@@ -225,7 +226,8 @@ transient."
      (svg-image svg :pointer 'arrow :grid-param grid-param)))
   (sketch-mode)
   (call-interactively 'sketch-transient)
-  (setq svg-sketch (sketch-group "main")))
+  (setq svg-sketch (sketch-group "main"))
+  (sketch-add-layer))
 
 ;;;###autoload
 (defun sketch (arg)
@@ -242,6 +244,7 @@ values"
         (switch-to-buffer (get-buffer-create "*sketch*"))
         (defvar-local sketch-elements nil)
         (defvar-local grid-param 25)
+        (defvar-local active-layer 0)
         (setq grid-param (if arg 25 (read-number "Enter grid parameter (enter 0 for no grid): ")))
         (sketch--create-canvas width height grid-param)))))
 
@@ -379,14 +382,16 @@ values"
    ["Font definitions"
     ("-f" "family" sketch-select-font)
     ("-w" "font-weight" sketch-font-weight)
-    ("-s" "font-size" sketch-font-size)]
-   ["Grid"
+    ("-s" "font-size" sketch-font-size)]]
+   [["Grid"
     ("s" "Snap to grid" sketch-snap)
     ("g" "Toggle grid" sketch-toggle-grid)]
    ["Labels"
     ("l" "Toggle labels" sketch-toggle-labels)]
    ["Layers"
-    ("a" "Active layer" sketch-layer)]]
+    ("L" sketch-layer)
+    ("-L" sketch-layers)
+    ("A" "Add layer" sketch-add-layer)]]
   ["Commands"
    [([drag-mouse-1] "Draw object"  sketch-interactively-1)
     ([mouse-1] "Draw text"  sketch-text-interactively)
@@ -465,13 +470,13 @@ values"
                                :font-size 20
                                :stroke "red"
                                :fill "red"))))
-        (cddr svg-sketch))
+        (cddr (nth active-layer svg-layers)))
     svg-labels))
 
 (defun sketch-labels-list ()
   (mapcar (lambda (node)
             (dom-attr node 'id))
-          (cddr svg-sketch)))
+          (cddr (nth active-layer svg-layers))))
 
 (defun sketch-create-label ()
   (interactive)
@@ -488,14 +493,15 @@ values"
   (sketch-redraw))
 
 (transient-define-infix sketch-layer ()
-  :description "Option with list"
-  :class 'sketch-variable:choices
-  :argument "--layer="
-  :choices (sketch-list-layers)
-  :default "layer-0")
+  "Layer that is currently active when sketching."
+  :description "Active layer"
+  :class 'transient-lisp-variable
+  :variable 'active-layer)
 
 (defun sketch-list-layers ()
-  (mapcar (lambda (layer) (alist-get 'id (cadr layer))) svg-layers))
+  (mapcar #'number-to-string (number-sequence 0 (length svg-layers))))
+  ;; (with-current-buffer (get-buffer "*sketch*")
+  ;;   (mapcar (lambda (layer) (alist-get 'id (cadr layer))) svg-layers)))
 
 (defun sketch-translate-node-coords (node amount &rest args)
   (dolist (coord args node)
@@ -523,9 +529,12 @@ values"
 (defun sketch-redraw ()
   (unless sketch-mode
     (user-error "Not in sketch-mode buffer"))
-  (setq svg (append svg-canvas (when sketch-show-grid (cddr svg-grid))))
+  (setq svg (append svg-canvas
+                    (when sketch-show-grid (cddr svg-grid))
+                    (when sketch-show-labels (cddr (sketch-labels)))))
   (dom-append-child svg svg-sketch)
-           ;; (when sketch-show-labels (sketch-labels))))
+  (dolist (layer show-layers)
+    (dom-append-child svg-sketch (nth layer svg-layers)))
   (erase-buffer) ;; a (not exact) alternative is to use (kill-backward-chars 1)
   (insert-image (svg-image svg :pointer 'arrow :grid-param grid-param)))
 
@@ -562,8 +571,9 @@ values"
                                ("circle" (list 'svg-circle
                                                (car start-coords) (cdr start-coords)
                                                (sketch--circle-radius start-coords end-coords)))
-                               ("ellipse" `(svg-ellipse ,@(sketch--ellipse-coords start-coords end-coords))))))
-    (apply (car command-and-coords) svg-sketch `(,@(cdr command-and-coords) ,@object-props :id ,(sketch-create-label)))
+                               ("ellipse" (svg-ellipse ,@(sketch--ellipse-coords start-coords end-coords))))))
+    (apply (car command-and-coords) (nth active-layer svg-layers) `(,@(cdr command-and-coords) ,@object-props :id ,(sketch-create-label)))
+    (print svg-layers)
     (sketch-redraw)))
 
 (transient-define-suffix sketch-remove-object ()
@@ -687,6 +697,65 @@ values"
   :argument "--font-weight="
   :choices '("bold")
   :default "normal")
+
+;; (defclass sketch-variable:layers (transient-variable)
+;;   ((fallback    :initarg :fallback    :initform nil)
+;;    (default     :initarg :default     :initform nil)))
+
+;; (cl-defmethod transient-infix-read ((obj sketch-variable:layers))
+;;   (let ((value (if-let (val (oref obj value))
+;;                    val
+;;                  (oref obj default)))
+;;         (layer (read-number "Type number of layer for toggle: ")))
+;;     (if (memq layer value)
+;;         (delq layer value)
+;;       (push layer value))))
+
+;; (cl-defmethod transient-infix-value ((obj sketch-variable:layers))
+;;   (let ((default (oref obj default)))
+;;     (if-let ((value (oref obj value)))
+;;         value)
+;;     (when default
+;;       default)))
+
+;; (cl-defmethod transient-format-value ((obj sketch-variable:layers))
+;;   (let ((value (oref obj value))
+;;         (default  (oref obj default)))
+;;     (format "%s" (if value
+;;                      (oref obj value)
+;;                    (oref obj default)))))
+  ;; (let ((value (oref obj value))
+  ;;       (default  (oref obj default)))
+  ;;   (if value
+  ;;       (format "%s (%s)"
+  ;;               (propertize value 'face (cons 'foreground-color value))
+  ;;               (propertize (apply 'color-rgb-to-hex (color-name-to-rgb value))
+  ;;                           'face 'transient-inactive-argument))
+  ;;     (if (string= default "none")
+  ;;         (propertize "none" 'face 'transient-inactive-argument)
+  ;;       (format "%s (%s)"
+  ;;               (propertize default 'face (cons 'foreground-color default))
+  ;;               (propertize (apply 'color-rgb-to-hex (color-name-to-rgb default))
+  ;;                           'face 'transient-inactive-argument))))))
+
+(transient-define-suffix sketch-add-layer ()
+  (interactive)
+  (setq svg-layers (append svg-layers
+                           (list (sketch-group (format "layer-%s" (length svg-layers))))))
+  (message "Existing layers (indices): %s" (mapconcat #'number-to-string
+                                            (number-sequence 0 (1- (length svg-layers)))
+                                            ", ")))
+
+(transient-define-infix sketch-layers ()
+  "List with layers that should be added to the image.
+Should be a list of numbers containing the number of the layers
+that should be added to the image. Initial value: (0)"
+  :description "Show layers"
+  :class 'transient-lisp-variable
+  :variable 'show-layers)
+  ;; :argument "--layers="
+  ;; :default '(0))
+  ;; :default (number-sequence (length svg-layers)))
 
 (transient-define-suffix sketch-crop (event)
   (interactive "@e")
