@@ -1,6 +1,6 @@
-;;; sketch-mode.el --- Support for the Foo programming language  -*- lexical-binding: t; -*-
+;;; sketch-mode.el --- Quickly create svg sketches using keyboard and mouse -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2010-2021 Daniel Nicolai
+;; Copyright (C) 2021 Daniel Nicolai
 
 
 ;; Author: D.L. Nicolai <dalanicolai@gmail.com>
