@@ -1,10 +1,11 @@
 ;;; sketch-mode.el --- Quickly create svg sketches using keyboard and mouse -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2021 Daniel Nicolai
+;; Copyright (C) 2021  Free Software Foundation, Inc.
 
 
 ;; Author: D.L. Nicolai <dalanicolai@gmail.com>
 ;; Created: 17 Jul 2021
+;; Version: 0
 
 ;; Keywords: multimedia 
 ;; URL: https://github.com/dalanicolai/sketch-mode
@@ -79,7 +80,7 @@
   "Default size for sketch canvas.
 Cons cell with car and cdr both integers, respectively
 representing the image width and image height
-(default: '(800 . 600))."
+default: (800 . 600)."
   :type '(cons integer integer))
 
 (defcustom sketch-show-grid t
@@ -134,8 +135,8 @@ STOPS is a list of percentage/color pairs."
   (svg--def
    svg
    (apply
-    'dom-node
-    'marker 
+    #'dom-node
+    'marker
     `((id . ,id)
       (viewBox . "0 0 10 10")
       (refX . 5)
@@ -165,17 +166,16 @@ In sketch-mode buffer press \\[sketch-transient] to activate the
 transient."
   :lighter "sketch-mode"
   :keymap
-  '(([sketch drag-mouse-1] . sketch-interactively)
+  `(([sketch drag-mouse-1] . sketch-interactively)
     ;; ([C-S-drag-mouse-1] . sketch-interactively)
-    ("" . sketch-transient)))
+    (,(kbd "C-c C-s") . sketch-transient)))
 
 (defun sketch--circle-radius (start-coords end-coords)
   (sqrt (+ (expt (- (car end-coords) (car start-coords)) 2)
            (expt (- (cdr end-coords) (cdr start-coords)) 2))))
-
-(defun sketch--rectangle-coords (start-coords end-coords)
-  (let ((base-coords (cons (apply 'min (list (car start-coords) (car end-coords)))
-                           (apply 'min (list (cdr start-coords) (cdr end-coords))))))
+ (defun sketch--rectangle-coords (start-coords end-coords)
+  (let ((base-coords (cons (apply #'min (list (car start-coords) (car end-coords)))
+                           (apply #'min (list (cdr start-coords) (cdr end-coords))))))
   (list (car base-coords)
         (cdr base-coords)
         (abs (- (car end-coords) (car start-coords)))
@@ -189,10 +189,10 @@ transient."
 
 (defun sketch--create-canvas (width height &optional grid-param)
   "Create canvas for drawing svg using the mouse."
-  (defvar svg)
+  (defvar sketch-svg)
   (defvar svg-canvas)
   (defvar svg-grid)
-  (defvar svg-sketch)
+  (defvar sketch-root)
     (insert-image
      (let ((width width)
            (height height))
@@ -210,11 +210,11 @@ transient."
            (let ((pos (* (1+ x) grid-param)))
              (svg-line svg-grid 0 pos width pos :stroke-dasharray (when dash "2,4"))
              (setq dash (if dash nil t)))))
-       (setq svg (append svg-canvas (when sketch-show-grid (cddr svg-grid))))
-       (svg-image svg
+       (setq sketch-svg (append svg-canvas (when sketch-show-grid (cddr svg-grid))))
+       (svg-image sketch-svg
                   :grid-param grid-param
                   :pointer 'arrow
-                  :map `(((rect . ((0 . 0) . (,(dom-attr svg 'width) . ,(dom-attr svg 'height))))
+                  :map `(((rect . ((0 . 0) . (,(dom-attr sketch-svg 'width) . ,(dom-attr sketch-svg 'height))))
                           ;; :map '(((rect . ((0 . 0) . (800 . 600)))
                           sketch
                           (pointer arrow help-echo (lambda (_ _ pos)
@@ -225,7 +225,7 @@ transient."
                                                                       (+ (cdr coords) sketch-im-y-offset)))))))))))
     (sketch-mode)
     (call-interactively 'sketch-transient)
-    (setq svg-sketch (svg-create width height)))
+    (setq sketch-root (svg-create width height)))
 
 ;;;###autoload
 (defun sketch (arg)
@@ -240,6 +240,8 @@ values"
       (let ((width (if arg (car sketch-default-image-size) (read-number "Enter width: ") ))
             (height (if arg 600 (read-number "Enter height: "))))
         (switch-to-buffer (get-buffer-create "*sketch*"))
+        ;; FIXME: `defvar' can't be meaningfully inside a function like that.
+        ;; FIXME: Use a `sketch-' prefix for all dynbound vars.
         (defvar-local sketch-elements nil)
         (defvar-local grid-param 25)
         (setq grid-param (if arg 25 (read-number "Enter grid parameter (enter 0 for no grid): ")))
@@ -304,7 +306,7 @@ values"
   ((fallback    :initarg :fallback    :initform nil)
    (default     :initarg :default     :initform nil)))
 
-(cl-defmethod transient-infix-read ((obj sketch-variable:colors))
+(cl-defmethod transient-infix-read ((_obj sketch-variable:colors))
   (read-color "Select color: "))
 
 (cl-defmethod transient-infix-value ((obj sketch-variable:colors))
@@ -314,19 +316,24 @@ values"
       (when default
         (concat (oref obj argument) (substring-no-properties default))))))
 
+;; We always call the autoloaded `color-name-to-rgb' before calling this
+;; function, so we know it's available even tho the compiler doesn't.
+(declare-function color-rgb-to-hex "color"
+                                     (red green blue &optional digits-per-component))
+
 (cl-defmethod transient-format-value ((obj sketch-variable:colors))
   (let ((value (oref obj value))
         (default  (oref obj default)))
     (if value
         (format "%s (%s)"
                 (propertize value 'face (cons 'foreground-color value))
-                (propertize (apply 'color-rgb-to-hex (color-name-to-rgb value))
+                (propertize (apply #'color-rgb-to-hex (color-name-to-rgb value))
                             'face 'transient-inactive-argument))
       (if (string= default "none")
           (propertize "none" 'face 'transient-inactive-argument)
         (format "%s (%s)"
                 (propertize default 'face (cons 'foreground-color default))
-                (propertize (apply 'color-rgb-to-hex (color-name-to-rgb default))
+                (propertize (apply #'color-rgb-to-hex (color-name-to-rgb default))
                             'face 'transient-inactive-argument))))))
 
   ;; (let* ((args (when transient-current-prefix (transient-args 'sketch-transient)))
@@ -362,7 +369,7 @@ values"
     ;;                                            (car start-coords) (cdr start-coords)
     ;;                                            (sketch--circle-radius start-coords end-coords)))
     ;;                            ("ellipse" `(svg-ellipse ,@(sketch--ellipse-coords start-coords end-coords))))))
-    ;; (apply (car command-and-coords) svg-sketch `(,@(cdr command-and-coords) ,@object-props :id ,(sketch-create-label)))
+    ;; (apply (car command-and-coords) sketch-root `(,@(cdr command-and-coords) ,@object-props :id ,(sketch-create-label)))
     ;; (sketch-redraw)))
 
 (transient-define-prefix sketch-transient ()
@@ -395,7 +402,7 @@ values"
    [("d" "Show definition" sketch-show-definition)
     ("D" "Copy definition" sketch-copy-definition)
     ("S" "Save image" sketch-save)]
-   [("q" "Quit"           transient-quit-one)]])
+   [("q" "Quit transient"           transient-quit-one)]])
 
 (transient-define-infix sketch-object ()
   :description "Option with list"
@@ -463,18 +470,18 @@ values"
                                :font-size 20
                                :stroke "red"
                                :fill "red"))))
-        (cddr svg-sketch))
+        (cddr sketch-root))
     (cddr svg-labels)))
 
 (defun sketch-labels-list ()
   (mapcar (lambda (node)
             (dom-attr node 'id))
-          (cddr svg-sketch)))
+          (cddr sketch-root)))
 
 (defun sketch-create-label ()
   (interactive)
   (let* ((alphabet "abcdefghijklmnopqrstuvwxyz")
-         (labels-list (mapcar 'string (concat alphabet (upcase alphabet))))
+         (labels-list (mapcar #'string (concat alphabet (upcase alphabet))))
          (labels (sketch-labels-list)))
     (while (member (car labels-list) labels)
       (setq labels-list (cdr labels-list)))
@@ -489,7 +496,7 @@ values"
   (dolist (coord args node)
     (cl-decf (alist-get coord (cadr node)) amount)))
 
-(defun svg-translate (dx dy)
+(defun sketch--svg-translate (dx dy)
   (interactive)
   (mapcar (lambda (node)
             (pcase (car node)
@@ -502,20 +509,20 @@ values"
                (sketch-translate-node-coords node dy 'cy))
               ('text (sketch-translate-node-coords node dx 'x)
                      (sketch-translate-node-coords node dy 'y))))
-          (cddr svg-sketch)))
+          (cddr sketch-root)))
 
 (defun sketch-redraw ()
   (unless sketch-mode
     (user-error "Not in sketch-mode buffer"))
-  (setq svg (append svg-canvas
+  (setq sketch-svg (append svg-canvas
                     (when sketch-show-grid (cddr svg-grid))
-                    (cddr svg-sketch)
+                    (cddr sketch-root)
                     (when sketch-show-labels (sketch-labels))))
   (erase-buffer) ;; a (not exact) alternative is to use (kill-backward-chars 1)
-  (insert-image (svg-image svg
+  (insert-image (svg-image sketch-svg
                            :pointer 'arrow
                            :grid-param grid-param
-                           :map `(((rect . ((0 . 0) . (,(dom-attr svg 'width) . ,(dom-attr svg 'height))))
+                           :map `(((rect . ((0 . 0) . (,(dom-attr sketch-svg 'width) . ,(dom-attr sketch-svg 'height))))
                            ;; :map '(((rect . ((0 . 0) . (800 . 600)))
                                    sketch
                                    (pointer arrow help-echo (lambda (_ _ pos)
@@ -559,12 +566,12 @@ values"
                                                (car start-coords) (cdr start-coords)
                                                (sketch--circle-radius start-coords end-coords)))
                                ("ellipse" `(svg-ellipse ,@(sketch--ellipse-coords start-coords end-coords))))))
-    (apply (car command-and-coords) svg-sketch `(,@(cdr command-and-coords) ,@object-props :id ,(sketch-create-label)))
+    (apply (car command-and-coords) sketch-root `(,@(cdr command-and-coords) ,@object-props :id ,(sketch-create-label)))
     (sketch-redraw)))
 
 (transient-define-suffix sketch-remove-object ()
   (interactive)
-  (svg-remove svg-sketch (completing-read "Remove element with id: "
+  (svg-remove sketch-root (completing-read "Remove element with id: "
                                           (sketch-labels-list)))
   (sketch-redraw))
 ;; (defun sketch-interactively (event)
@@ -581,7 +588,7 @@ values"
 ;;       (setq start-coords (sketch-snap-to-grid start-coords grid-param))
 ;;       (setq end-coords (sketch-snap-to-grid end-coords grid-param)))
 ;;     (pcase sketch-default-shape
-;;       ('line   (svg-line svg (car start-coords) (cdr start-coords) (car end-coords) (cdr end-coords)
+;;       ('line   (svg-line sketch-svg (car start-coords) (cdr start-coords) (car end-coords) (cdr end-coords)
 ;;                          :marker-start (if sketch-include-start-marker
 ;;                                          "url(#arrow)"
 ;;                                        "none")
@@ -591,49 +598,64 @@ values"
 ;;                          :marker-end (if sketch-include-end-marker
 ;;                                          "url(#arrow)"
 ;;                                        "none")))
-;;       ('rectangle (apply 'svg-rectangle svg (append (sketch--rectangle-coords start-coords end-coords) '(:fill "none"))))
-;;       ('circle (svg-circle svg (car start-coords) (cdr start-coords) (sketch--circle-radius start-coords end-coords)
+;;       ('rectangle (apply 'svg-rectangle sketch-svg (append (sketch--rectangle-coords start-coords end-coords) '(:fill "none"))))
+;;       ('circle (svg-circle sketch-svg (car start-coords) (cdr start-coords) (sketch--circle-radius start-coords end-coords)
 ;;                            :fill "none"))
-;;       ('ellipse (apply 'svg-ellipse svg  (append (sketch--ellipse-coords start-coords end-coords) '(:fill "none")))))
+;;       ('ellipse (apply 'svg-ellipse sketch-svg  (append (sketch--ellipse-coords start-coords end-coords) '(:fill "none")))))
 ;;     (kill-backward-chars 1)
-;;     (insert-image (svg-image svg :pointer 'arrow :grid-param grid-param))))
+;;     (insert-image (svg-image sketch-svg :pointer 'arrow :grid-param grid-param))))
   ;; (call-interactively 'tutorial-transient)
 
+(define-minor-mode sketch-lisp-mode
+  "Minor mode for svg lisp buffers."
+  :lighter "sketch"
+  :keymap
+  `((,(kbd "C-c C-s") . sketch-transient)
+    (,(kbd "C-c C-c") . sketch-load-definition)))
+
 (transient-define-suffix sketch-show-definition ()
-  :transient 'transient--do-exit
+  ;; :transient 'transient--do-exit
   (interactive)
-  (let ((buffer (get-buffer-create "svg"))
-        (sketch svg-sketch))
-    (transient-quit-one)
-    (switch-to-buffer-other-window buffer)
+  (if-let (win (get-buffer-window "sketch-svg"))
+      (delete-window win)
+    (let ((buffer (get-buffer-create "sketch-svg"))
+          (sketch sketch-root))
+      (set-window-dedicated-p
+       (get-buffer-window
+        (pop-to-buffer buffer '(display-buffer-in-side-window . ((side . right) (window-width . 70)))))
+       t)
     (erase-buffer)
-    (pp svg-sketch (current-buffer)))
-    (emacs-lisp-mode))
+    (pp sketch buffer))
+    (emacs-lisp-mode)
+    (sketch-lisp-mode)))
 
 (transient-define-suffix sketch-copy-definition ()
   (interactive)
   (with-temp-buffer
-    (pp svg (current-buffer))
+    (pp sketch-svg (current-buffer))
     (kill-new (buffer-string)))
   (message "SVG definition added to kill-ring"))
 
 (defun sketch-load-definition ()
   (interactive)
-  (setq svg-sketch (read (buffer-string))))
+  (setq sketch-root (read (buffer-string)))
+  (with-current-buffer "*sketch*"
+    (sketch-redraw)))
+
+(defvar sketch-undo-redo nil)
 
 (transient-define-suffix sketch-undo ()
   (interactive)
-  (defvar sketch-undo-redo nil)
-  (let ((sketch-reverse (nreverse svg-sketch)))
+  (let ((sketch-reverse (nreverse sketch-root)))
     (push (pop sketch-reverse) sketch-undo-redo)
-    (setq svg-sketch (nreverse sketch-reverse)))
+    (setq sketch-root (nreverse sketch-reverse)))
   (sketch-redraw))
 
 (transient-define-suffix sketch-redo ()
   (interactive)
-  (let ((sketch-reverse (nreverse svg-sketch)))
+  (let ((sketch-reverse (nreverse sketch-root)))
     (push (pop sketch-undo-redo) sketch-reverse)
-    (setq svg-sketch (nreverse sketch-reverse)))
+    (setq sketch-root (nreverse sketch-reverse)))
   (sketch-redraw))
 
 (transient-define-suffix sketch-text-interactively (event)
@@ -660,7 +682,7 @@ values"
                              ;;               (if sketch-include-end-marker
                              ;;                   "url(#arrow)"
                              ;;                 "none"))))
-    (apply 'svg-text svg-sketch text :x (car coords) :y (cdr coords) object-props))
+    (apply #'svg-text sketch-root text :x (car coords) :y (cdr coords) object-props))
     (sketch-redraw))
 
 (transient-define-infix sketch-select-font ()
@@ -702,12 +724,11 @@ values"
     (setq svg-canvas (svg-create new-width new-height :stroke "gray"))
     (svg-marker svg-canvas "arrow" 8 8 "black" t)
     (svg-rectangle svg-canvas 0 0 new-width new-height :fill "white")
-    (setf (cddr svg-sketch) (svg-translate (car start-coords) (cdr start-coords)))
+    (setf (cddr sketch-root) (sketch--svg-translate (car start-coords) (cdr start-coords)))
     (sketch-redraw)))
 
 (transient-define-suffix sketch-save ()
   (interactive)
   (image-save))
-
-(provide 'sketch-mode)
-;;; filename ends here
+ (provide 'sketch-mode)
+;;; sketch-mode.el ends here
