@@ -213,7 +213,7 @@ transient."
              (svg-line svg-grid 0 pos width pos :stroke-dasharray (when dash "2,4"))
              (setq dash (if dash nil t)))))
        (setq sketch-svg (append svg-canvas (when sketch-show-grid (cddr svg-grid))))
-       (svg-image sketch-svg
+       (sketch-image sketch-svg
                   :grid-param grid-parameter
                   :pointer 'arrow
                   :map `(((rect . ((0 . 0) . (,(dom-attr sketch-svg 'width) . ,(dom-attr sketch-svg 'height))))
@@ -533,7 +533,7 @@ values"
                     (cddr sketch-root)
                     (when sketch-show-labels (sketch-labels))))
   (erase-buffer) ;; a (not exact) alternative is to use (kill-backward-chars 1)
-  (insert-image (svg-image sketch-svg
+  (insert-image (sketch-image sketch-svg
                            :pointer 'arrow
                            :grid-param grid-param
                            :map `(((rect . ((0 . 0) . (,(dom-attr sketch-svg 'width) . ,(dom-attr sketch-svg 'height))))
@@ -619,7 +619,7 @@ values"
 ;;                            :fill "none"))
 ;;       ('ellipse (apply 'svg-ellipse sketch-svg  (append (sketch--ellipse-coords start-coords end-coords) '(:fill "none")))))
 ;;     (kill-backward-chars 1)
-;;     (insert-image (svg-image sketch-svg :pointer 'arrow :grid-param grid-param))))
+;;     (insert-image (sketch-image sketch-svg :pointer 'arrow :grid-param grid-param))))
   ;; (call-interactively 'tutorial-transient)
 
 (define-minor-mode sketch-lisp-mode
@@ -743,6 +743,18 @@ values"
     (svg-rectangle svg-canvas 0 0 new-width new-height :fill "white")
     (setf (cddr sketch-root) (sketch--svg-translate (car start-coords) (cdr start-coords)))
     (sketch-redraw)))
+
+(defun sketch-image (svg &rest props)
+  "Return an image object from SVG.
+PROPS is passed on to `create-image' as its PROPS list."
+  (apply
+   #'create-image
+   (with-temp-buffer
+     (insert "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n")
+     (svg-print svg)
+     (buffer-string))
+   'svg t props))
 
 (transient-define-suffix sketch-save ()
   (interactive)
