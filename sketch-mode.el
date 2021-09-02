@@ -66,7 +66,8 @@
 (require 'transient)
 
 (defgroup sketch nil
-  "Configure default sketch (object) properties.")
+  "Configure default sketch (object) properties."
+  :group 'Applications)
 
 (defcustom sketch-im-x-offset 7
   "Default grid line separation distance (integer)."
@@ -187,12 +188,13 @@ transient."
         (abs (/ (- (car end-coords) (car start-coords)) 2))
         (abs (/ (- (cdr end-coords) (cdr start-coords)) 2))))
 
-(defun sketch--create-canvas (width height &optional grid-param)
+(defvar sketch-svg)
+(defvar-local svg-canvas nil)
+(defvar-local svg-grid nil)
+(defvar-local sketch-root nil)
+
+(defun sketch--create-canvas (width height &optional grid-parameter)
   "Create canvas for drawing svg using the mouse."
-  (defvar sketch-svg)
-  (defvar svg-canvas)
-  (defvar svg-grid)
-  (defvar sketch-root)
     (insert-image
      (let ((width width)
            (height height))
@@ -201,18 +203,18 @@ transient."
        (svg-rectangle svg-canvas 0 0 width height :fill "white")
        (setq svg-grid (svg-create width height))
        (let ((dash t))
-         (dotimes (x (1- (/ width grid-param)))
-           (let ((pos (* (1+ x) grid-param)))
+         (dotimes (x (1- (/ width grid-parameter)))
+           (let ((pos (* (1+ x) grid-parameter)))
              (svg-line svg-grid pos 0 pos height :stroke-dasharray (when dash "2,4"))
              (setq dash (if dash nil t)))))
        (let ((dash t))
-         (dotimes (x (1- (/ height grid-param)))
-           (let ((pos (* (1+ x) grid-param)))
+         (dotimes (x (1- (/ height grid-parameter)))
+           (let ((pos (* (1+ x) grid-parameter)))
              (svg-line svg-grid 0 pos width pos :stroke-dasharray (when dash "2,4"))
              (setq dash (if dash nil t)))))
        (setq sketch-svg (append svg-canvas (when sketch-show-grid (cddr svg-grid))))
        (svg-image sketch-svg
-                  :grid-param grid-param
+                  :grid-param grid-parameter
                   :pointer 'arrow
                   :map `(((rect . ((0 . 0) . (,(dom-attr sketch-svg 'width) . ,(dom-attr sketch-svg 'height))))
                           ;; :map '(((rect . ((0 . 0) . (800 . 600)))
@@ -226,6 +228,8 @@ transient."
     (sketch-mode)
     (call-interactively 'sketch-transient)
     (setq sketch-root (svg-create width height)))
+
+(defvar-local sketch-elements nil)
 
 ;;;###autoload
 (defun sketch (arg)
@@ -242,15 +246,14 @@ values"
         (switch-to-buffer (get-buffer-create "*sketch*"))
         ;; FIXME: `defvar' can't be meaningfully inside a function like that.
         ;; FIXME: Use a `sketch-' prefix for all dynbound vars.
-        (defvar-local sketch-elements nil)
-        (defvar-local grid-param 25)
+        (setq grid-param 25)
         (setq grid-param (if arg 25 (read-number "Enter grid parameter (enter 0 for no grid): ")))
         (sketch--create-canvas width height grid-param)))))
 
 
-(defun sketch-snap-to-grid (coord grid-param)
-  (cons (* (round (/ (float (car coord)) grid-param)) grid-param)
-        (* (round (/ (float (cdr coord)) grid-param)) grid-param)))
+(defun sketch-snap-to-grid (coord grid-parameter)
+  (cons (* (round (/ (float (car coord)) grid-parameter)) grid-parameter)
+        (* (round (/ (float (cdr coord)) grid-parameter)) grid-parameter)))
 
 
 ;;; Transient
@@ -448,8 +451,9 @@ values"
 
 (defun sketch-toggle-grid ()
   (interactive)
-  (setq sketch-show-grid (if sketch-show-grid nil t))
-  (sketch-redraw))
+  (with-current-buffer "*sketch*"
+    (setq sketch-show-grid (if sketch-show-grid nil t))
+    (sketch-redraw)))
 
 (defun sketch-labels ()
   (interactive)
@@ -490,8 +494,9 @@ values"
 
 (defun sketch-toggle-labels ()
   (interactive)
-  (setq sketch-show-labels (if sketch-show-labels nil t))
-  (sketch-redraw))
+  (with-current-buffer "*sketch*"
+    (setq sketch-show-labels (if sketch-show-labels nil t))
+    (sketch-redraw)))
 
 (defun sketch-translate-node-coords (node amount &rest args)
   (dolist (coord args node)
@@ -515,12 +520,14 @@ values"
 (defun sketch-redraw (&optional lisp lisp-buffer)
   (unless sketch-mode
     (user-error "Not in sketch-mode buffer"))
-  (let ((lisp-window (or (get-buffer-window "*sketch-root*")
-                         (get-buffer-window lisp-buffer))))
-    (unless (string= (buffer-name (window-buffer lisp-window)) "*sketch*")
-      (if-let (buf (get-buffer"*sketch-root*"))
-          (sketch-update-lisp-window sketch-root buf)
-        (sketch-update-lisp-window lisp lisp-buffer))))
+  (when lisp-buffer
+    (sketch-update-lisp-window lisp lisp-buffer))
+  ;; (let ((lisp-window (or (get-buffer-window "*sketch-root*")
+  ;;                        (get-buffer-window lisp-buffer))))
+  ;;   (unless (string= (buffer-name (window-buffer lisp-window)) "*sketch*")
+  ;;     (if-let (buf (get-buffer"*sketch-root*"))
+  ;;         (sketch-update-lisp-window sketch-root buf)
+  ;;       (sketch-update-lisp-window lisp lisp-buffer))))
   (setq sketch-svg (append svg-canvas
                     (when sketch-show-grid (cddr svg-grid))
                     (cddr sketch-root)
@@ -574,6 +581,8 @@ values"
                                                (sketch--circle-radius start-coords end-coords)))
                                ("ellipse" `(svg-ellipse ,@(sketch--ellipse-coords start-coords end-coords))))))
     (apply (car command-and-coords) sketch-root `(,@(cdr command-and-coords) ,@object-props :id ,(sketch-create-label)))
+    (when-let (buf (get-buffer "*sketch-root*"))
+      (sketch-update-lisp-window sketch-root buf))
     (sketch-redraw)))
 
 (transient-define-suffix sketch-remove-object ()
@@ -645,9 +654,10 @@ values"
 
 (defun sketch-load-definition ()
   (interactive)
-  (setq sketch-root (read (buffer-string)))
-  (with-current-buffer "*sketch*"
-    (sketch-redraw)))
+  (let ((def (read (buffer-string))))
+    (with-current-buffer "*sketch*"
+      (setq sketch-root def)
+      (sketch-redraw))))
 
 (defvar sketch-undo-redo nil)
 
@@ -741,21 +751,54 @@ values"
 
 ;;; Modify object
 
+(defun sketch-translate-object (buffer object-def props coords amount)
+  (dolist (coord coords)
+    (cl-incf (alist-get coord props) amount))
+  (sketch-redraw object-def buffer))
+
+;; TODO 'refactor' subsequent suffixes (e.g. create general function/macro)
 (transient-define-suffix sketch-translate-down (args)
-  (interactive (list (transient-args 'sketch-modify-object)))
+  (interactive (list (oref transient-current-prefix :value)))
   (let* ((object (transient-arg-value "--object=" args))
-         (object-def (dom-by-id sketch-svg (format "^a$" object)))
+         (buffer (transient-arg-value "--buffer=" args))
+         (object-def (dom-by-id sketch-svg (format "^%s$" object)))
          (props (cadar object-def)))
-    (dolist (coord '(y1 y2))
-      (cl-incf (alist-get coord props) 10))
-    (sketch-redraw object-def)))
+    (sketch-translate-object buffer object-def props '(y1 y2) 1)))
+
+(transient-define-suffix sketch-translate-fast-down (args)
+  (interactive (list (oref transient-current-prefix :value)))
+  (let* ((object (transient-arg-value "--object=" args))
+         (buffer (transient-arg-value "--buffer=" args))
+         (object-def (dom-by-id sketch-svg (format "^%s$" object)))
+         (props (cadar object-def)))
+    (sketch-translate-object buffer object-def props '(y1 y2) 10)))
+
+(transient-define-suffix sketch-translate-up (args)
+  (interactive (list (oref transient-current-prefix :value)))
+  (let* ((object (transient-arg-value "--object=" args))
+         (buffer (transient-arg-value "--buffer=" args))
+         (object-def (dom-by-id sketch-svg (format "^%s$" object)))
+         (props (cadar object-def)))
+    (sketch-translate-object buffer object-def props '(y1 y2) -1)))
+
+(transient-define-suffix sketch-translate-fast-up (args)
+  (interactive (list (oref transient-current-prefix :value)))
+  (let* ((object (transient-arg-value "--object=" args))
+         (buffer (transient-arg-value "--buffer=" args))
+         (object-def (dom-by-id sketch-svg (format "^%s$" object)))
+         (props (cadar object-def)))
+    (sketch-translate-object buffer object-def props '(y1 y2) -10)))
 
 (transient-define-prefix sketch-modify-object ()
   "Set object properties."
-  :transient-suffix     'transient--do-call
+  :transient-suffix 'transient--do-call
   ["Properties"
-   [("o" "object" "--object=")]]
-  [("<down>" "Down" sketch-translate-down)
+   [("o" "object" sketch-modify-object 'transient--do-exit)]]
+  [[("<down>" "down" sketch-translate-down)
+   ("<up>" "up" sketch-translate-up)]
+   [("S-<down>" "fast down" sketch-translate-fast-down)
+    ("S-<up>" "fast up" sketch-translate-fast-up)]]
+  [("l" "Toggle labels" sketch-toggle-labels)
    ("q" "Quit" transient-quit-one)]
   (interactive)
   (let* ((object (completing-read "Transform element with id: "
@@ -763,13 +806,21 @@ values"
          (buffer (get-buffer-create (format "*sketch-object-%s*" object))))
     (display-buffer buffer '(display-buffer-in-side-window . ((side . right) (window-width . 70))))
     (pp (cadar (dom-by-id sketch-svg (format "^%s$" object))) buffer)
-    (transient-setup 'sketch-modify-object nil nil :value (list (format "--object=%s" object)))))
+    (with-current-buffer buffer
+      (emacs-lisp-mode))
+    (transient-setup 'sketch-modify-object
+                      nil
+                      nil
+                      :value (list (format "--object=%s" object)
+                                   (format "--buffer=%s" buffer)))))
 
 (defun sketch-update-lisp-window (lisp buffer)
   ;; (let ((sketch sketch-root))
-  (with-current-buffer buffer
+  (save-current-buffer
+    (switch-to-buffer-other-window buffer)
     (erase-buffer)
-    (pp lisp (current-buffer))))
+    (pp lisp (current-buffer))
+    (end-of-buffer)))
 
 
  (provide 'sketch-mode)

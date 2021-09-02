@@ -3,28 +3,50 @@
 
 * Preliminary comment
   This is a new package that is still in development. However, its main
-  functionality is very usable already. Any feedback, for example suggestions
-  for enhancing the interface/usability, is very welcome (probably best by
-  opening an issue). Also, any contributions are very welcome. The code of the
-  package is very accessible (especially if you quickly read how to use [[https://www.gnu.org/software/emacs/manual/html_node/elisp/Edebug.html][edebug]].
+  functionality is very usable already. On the other hand, several (or most)
+  features are not implemented completely, simply because implementing these
+  things take time, and I should first focus on keeping myself alive:|. But if
+  you know some elisp, than it should be quite straightforward to complete the
+  implementation of those features. Any feedback, for example suggestions for
+  enhancing the interface/usability, is very welcome (probably best by opening
+  an issue). Also, any contributions are very welcome. The code of the package
+  is very accessible (especially if you quickly read how to use [[https://www.gnu.org/software/emacs/manual/html_node/elisp/Edebug.html][edebug]]).
 
+  A list of ideas for implementation can be found in the preliminary comment in
+  the =sketch.el= file and additionally in the [[https://github.com/dalanicolai/sketch-mode/wiki/vision][wiki]] section.
+  
+  
 ** Included features
    - snap to grid
    - draw text
    - crop finale image
    - set stroke, fill, width etc.
    - show dom (lisp) in other window
-   - draw angle arcs (between lines, available soon)
+   - draw angle arcs (between lines, available soon, I hope. See
+     =implement-angle-arc= branch)
    - save drawing presets using [[https://magit.vc/manual/transient.html#Saving-Values][transient's saving values feature]] (documentation
      contribution welcome)
      
+** Incomplete features (merged into main)
+   - Draw labels (not implemented for all type of objects. Easy to implement)
+   - Modify object (not, at all, fully implemented for all object. Easy to
+     implement).
+     
+     It would be handy to have a 'transform group' option also. [[https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/transform][SVG groups allow
+     for easy transformations]]. Then it would probably be handy to wrap all
+     objects in group tags.
+
+** Incomplete features (not merged into main)
+   - Implement layers (see/try out =implement-layers= branch)
+   
 ** Delicious low hanging fruit
    - use svg snippets (i.e. design object in external programs like inkscape,
      geogebra etc., end quickly insert them in your sketches)
-   - export to tikz, asymptote, other image extensions etc.
 
 ** Less low hanging fruit
    - draw directly in you literate org file, with the dom updated in your source block
+   - export to tikz, asymptote, other image extensions etc. (probably requires
+     to implement 'nodes')
      
   The =sketch-mode.el= file starts with listing TODO items describing features
   that are missing from the package.
@@ -76,8 +98,13 @@
   - to remove an object (without using undo), you should toggle labels by
     pressing =l=, and then to remove an object enter its label after pressing
     =R=.
-  - You can hide the transient by pressing =q=, and you can go back to sketch
-    mode via =M-x sketch= (or =C-c C-t= when still in the sketch-mode buffer)
+  - You can also modify the drawing by changing the object definition (i.e.
+    elisp). For that press =d= to open the definition in a side-window, then
+    press =q= to hide (deactivate the) transient (keymap). Now modify the code
+    and press =C-c C=c=, to load it and update the =\*sketch\*= buffer. 
+  - After you've hidden the transient by pressing =q=, you can go back to
+    sketch mode via =M-x sketch= (or =C-c C-s= when still in the sketch-mode
+    buffer)
 
   Create your sketch and then save
   the file by pressing =S=.
@@ -87,7 +114,8 @@
   the Netherlands, I have no penny to scratch my butt. Therefore, although I am
   also really happy to offer it for free, if you find [[https://github.com/dalanicolai][my package(s)]] (real
   projects page in the making) useful (e.g. for you work), and if you can afford
-  it, then I would be very happy with any donation. As soon as I have the
+  it, then I would be very happy with any donation (of course that would also
+  enable me to work on your feature requests). As soon as I have the
   opportunity/possibility to find a stable job, I will happily suggest you to
   transfer or donate to other projects/charity.
 
