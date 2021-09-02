@@ -42,20 +42,3 @@
                                                 props)))))
     (tabulated-list-print)))
 
-(defun sketch-translate-down ()
-  (interactive)
-  (let* ((props (cadar (dom-by-id svg "^a$"))))
-    (dolist (coord '(y1 y2))
-      (cl-incf (alist-get coord props) 10)))
-  (sketch-redraw))
-
-(transient-define-prefix sketch-modify-object ()
-  "Set object properties."
-  :transient-suffix     'transient--do-call
-  ["Properties"
-   [("x1" "author" "author=")
-    ("y" "year" "year=")]]
-  [("<down>" "Down" sketch-translate-down)
-   ("q" "Quit" transient-quit-one)])
-  ;; (interactive)
-  ;; (djvu-switch-shared))

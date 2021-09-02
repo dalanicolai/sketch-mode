@@ -34,18 +34,18 @@
 
 ;; DONE add remove (objects) functionality (see `svg-remove')
 
-;; TODO move font transient (also its suffix) into main sketch transient (suffix)
+;; DONE move font transient (also its suffix) into main sketch transient (suffix)
 
-;; TODO add functionality to crop/select part of image (on save)
+;; DONE add functionality to crop/select part of image (on save)
 
-;; TODO add functionality to modify objects
+;; TODO add functionality to modify objects (see `add-object-modify-feature' branch)
 
 ;; TODO enable defining global svg settings (object properties)
 
 ;; TODO maybe transform relevant transient argument (strings) to variables
 
 ;; TODO add function to open svg code in 'other buffer' and quickly reload
-;; (after editing)
+;; (after editing, DONE see `add-object-modify-feature' branch)
 
 ;; TODO add functionality to start drawing from org-mode source block and update
 ;; source block after each draw/edit
@@ -396,8 +396,9 @@ values"
    [([sketch drag-mouse-1] "Draw object"  sketch-interactively-1)
     ([sketch mouse-1] "Draw text"  sketch-text-interactively)
     ([sketch C-S-drag-mouse-1] "Crop image" sketch-crop)]
-   [("R" "Remove object" sketch-remove-object)
-    ("u" "Undo" sketch-undo)
+   [("T" "Transfrom object" sketch-modify-object)
+    ("R" "Remove object" sketch-remove-object)]
+    [("u" "Undo" sketch-undo)
     ("r" "Redo" sketch-redo)]
    [("d" "Show definition" sketch-show-definition)
     ("D" "Copy definition" sketch-copy-definition)
@@ -511,9 +512,15 @@ values"
                      (sketch-translate-node-coords node dy 'y))))
           (cddr sketch-root)))
 
-(defun sketch-redraw ()
+(defun sketch-redraw (&optional lisp lisp-buffer)
   (unless sketch-mode
     (user-error "Not in sketch-mode buffer"))
+  (let ((lisp-window (or (get-buffer-window "*sketch-root*")
+                         (get-buffer-window lisp-buffer))))
+    (unless (string= (buffer-name (window-buffer lisp-window)) "*sketch*")
+      (if-let (buf (get-buffer"*sketch-root*"))
+          (sketch-update-lisp-window sketch-root buf)
+        (sketch-update-lisp-window lisp lisp-buffer))))
   (setq sketch-svg (append svg-canvas
                     (when sketch-show-grid (cddr svg-grid))
                     (cddr sketch-root)
@@ -616,9 +623,9 @@ values"
 (transient-define-suffix sketch-show-definition ()
   ;; :transient 'transient--do-exit
   (interactive)
-  (if-let (win (get-buffer-window "sketch-svg"))
+  (if-let (win (get-buffer-window "*sketch-root*"))
       (delete-window win)
-    (let ((buffer (get-buffer-create "sketch-svg"))
+    (let ((buffer (get-buffer-create "*sketch-root*"))
           (sketch sketch-root))
       (set-window-dedicated-p
        (get-buffer-window
@@ -730,5 +737,40 @@ values"
 (transient-define-suffix sketch-save ()
   (interactive)
   (image-save))
+
+
+;;; Modify object
+
+(transient-define-suffix sketch-translate-down (args)
+  (interactive (list (transient-args 'sketch-modify-object)))
+  (let* ((object (transient-arg-value "--object=" args))
+         (object-def (dom-by-id sketch-svg (format "^a$" object)))
+         (props (cadar object-def)))
+    (dolist (coord '(y1 y2))
+      (cl-incf (alist-get coord props) 10))
+    (sketch-redraw object-def)))
+
+(transient-define-prefix sketch-modify-object ()
+  "Set object properties."
+  :transient-suffix     'transient--do-call
+  ["Properties"
+   [("o" "object" "--object=")]]
+  [("<down>" "Down" sketch-translate-down)
+   ("q" "Quit" transient-quit-one)]
+  (interactive)
+  (let* ((object (completing-read "Transform element with id: "
+                                 (sketch-labels-list)))
+         (buffer (get-buffer-create (format "*sketch-object-%s*" object))))
+    (display-buffer buffer '(display-buffer-in-side-window . ((side . right) (window-width . 70))))
+    (pp (cadar (dom-by-id sketch-svg (format "^%s$" object))) buffer)
+    (transient-setup 'sketch-modify-object nil nil :value (list (format "--object=%s" object)))))
+
+(defun sketch-update-lisp-window (lisp buffer)
+  ;; (let ((sketch sketch-root))
+  (with-current-buffer buffer
+    (erase-buffer)
+    (pp lisp (current-buffer))))
+
+
  (provide 'sketch-mode)
 ;;; sketch-mode.el ends here
