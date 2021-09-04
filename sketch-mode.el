@@ -129,6 +129,9 @@ default: (800 . 600)."
 	        (const :tag "Arrow" 'arrow)
           (const :tag "Point" 'point)))
 
+
+;;; SVG-definitions
+
 (defun svg-marker (svg id width height &optional color reverse)
   "Add a gradient with ID to SVG.
 TYPE is `linear' or `radial'.
@@ -160,6 +163,20 @@ STOPS is a list of percentage/color pairs."
                                        (cy . 5)
                                        (r . 5)
                                        (fill . ,(or color "black"))))))))))
+
+(defun svg-group (&rest args)
+  (apply #'dom-node
+         'g
+         `(,(svg--arguments nil args))))
+
+
+;;; Resume sketch-code
+
+(defun sketch-group (id &rest args)
+  (apply #'svg-group
+         :id id
+         :transform "translate(0 0)"
+         args))
 
 (define-minor-mode sketch-mode
   "Create svg images using the mouse.
