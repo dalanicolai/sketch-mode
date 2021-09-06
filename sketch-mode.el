@@ -111,36 +111,37 @@ default: (800 . 600)."
           (const :tag "Circle" 'circle)
           (const :tag "Ellipse" 'ellipse)))
 
-(defcustom sketch-snap-to-grid t
-  "When non-nil snap to grid."
+(defcustom sketch--snap-to-grid t
+  "Default value of snap to grid.
+If non-nil then snap to grid."
   :type 'boolean)
 
 (defcustom sketch-include-start-marker nil
-  "Start start-marker"
+  "Start marker type"
   :type '(choice
 	        (const :tag "No marker" nil)
 	        (const :tag "Arrow" 'arrow)
-          (const :tag "Point" 'point)))
+          (const :tag "Dot" 'dot)))
 
 (defcustom sketch-include-mid-marker nil
   "Mid marker type"
   :type '(choice
 	        (const :tag "No marker" nil)
 	        (const :tag "Arrow" 'arrow)
-          (const :tag "Point" 'point)))
+          (const :tag "Dot" 'dot)))
 
 (defcustom sketch-include-end-marker nil
   "End marker type"
   :type '(choice
 	        (const :tag "No marker" nil)
 	        (const :tag "Arrow" 'arrow)
-          (const :tag "Point" 'point)))
+          (const :tag "Dot" 'dot)))
 
 
 ;;; SVG-definitions
 
 (defun svg-marker (svg id width height &optional color reverse)
-  "Add a gradient with ID to SVG.
+  "Define a marker with ID to SVG.
 TYPE is `linear' or `radial'.
 STOPS is a list of percentage/color pairs."
   (svg--def
@@ -300,7 +301,7 @@ values"
       (call-interactively 'sketch-transient))))
 
 
-(defun sketch-snap-to-grid (coord grid-parameter)
+(defun sketch--snap-to-grid (coord grid-parameter)
   (cons (* (round (/ (float (car coord)) grid-parameter)) grid-parameter)
         (* (round (/ (float (cdr coord)) grid-parameter)) grid-parameter)))
 
@@ -395,11 +396,11 @@ values"
     ;;      (snap (transient-arg-value "--snap-to-grid=" args))
     ;;      (start-coords (if (or (not snap) (string= snap "nil"))
     ;;                       (posn-object-x-y start)
-    ;;                     (sketch-snap-to-grid (posn-object-x-y start) grid-param)))
+    ;;                     (sketch--snap-to-grid (posn-object-x-y start) grid-param)))
     ;;      (end (event-end event))
     ;;      (end-coords (if (or (not snap) (string= snap "nil"))
     ;;                     (posn-object-x-y end)
-    ;;                   (sketch-snap-to-grid (posn-object-x-y end) grid-param)))
+    ;;                   (sketch--snap-to-grid (posn-object-x-y end) grid-param)))
     ;;      (object-props (list :stroke-width
     ;;                          (transient-arg-value "--stroke-width=" args)
     ;;                          :stroke
@@ -492,7 +493,7 @@ values"
   :description "Option with list"
   :class 'sketch-variable:choices
   :argument "--marker="
-  :choices '("arrow" "point")
+  :choices '("arrow" "dot")
   :default "none")
 
 (transient-define-infix sketch-snap ()
@@ -675,11 +676,11 @@ values"
          (snap (transient-arg-value "--snap-to-grid=" args))
          (start-coords (if (or (not snap) (string= snap "nil"))
                           (posn-object-x-y start)
-                        (sketch-snap-to-grid (posn-object-x-y start) grid-param)))
+                        (sketch--snap-to-grid (posn-object-x-y start) grid-param)))
          (end (event-end event))
          (end-coords (if (or (not snap) (string= snap "nil"))
                         (posn-object-x-y end)
-                      (sketch-snap-to-grid (posn-object-x-y end) grid-param)))
+                      (sketch--snap-to-grid (posn-object-x-y end) grid-param)))
          (object-props (list :stroke-width
                              (transient-arg-value "--stroke-width=" args)
                              :stroke
@@ -688,7 +689,7 @@ values"
                              (transient-arg-value "--fill-color=" args)
                              :marker-end (if args (pcase (transient-arg-value "--marker=" args)
                                                     ("arrow" "url(#arrow)")
-                                                    ("point" "url(#point)")
+                                                    ("dot" "url(#dot)")
                                                     (_ "none"))
                                            (if sketch-include-end-marker
                                                "url(#arrow)"
@@ -811,7 +812,7 @@ values"
          (snap (transient-arg-value "--snap-to-grid=" sketch-args))
          (coords (if (or (not snap) (string= snap "nil"))
                            (posn-object-x-y start)
-                         (sketch-snap-to-grid (posn-object-x-y start) grid-param)))
+                         (sketch--snap-to-grid (posn-object-x-y start) grid-param)))
          (text (read-string "Enter text: "))
          (object-props (list :font-size
                              (transient-arg-value "--font-size=" sketch-args)
@@ -822,7 +823,7 @@ values"
                              ;; (transient-arg-value "--fill-color=" sketch-args)
                              ;; :marker-end (if sketch-args (pcase (transient-arg-value "--marker=" sketch-args)
                              ;;                        ("arrow" "url(#arrow)")
-                             ;;                        ("point" "url(#point)")
+                             ;;                        ("dot" "url(#dot)")
                              ;;                        (_ "none"))
                              ;;               (if sketch-include-end-marker
                              ;;                   "url(#arrow)"
@@ -918,11 +919,11 @@ that should be added to the image. Initial value: (0)"
          (snap (transient-arg-value "--snap-to-grid=" args))
          (start-coords (if (or (not snap) (string= snap "nil"))
                            (posn-object-x-y start)
-                         (sketch-snap-to-grid (posn-object-x-y start) grid-param)))
+                         (sketch--snap-to-grid (posn-object-x-y start) grid-param)))
          (end (event-end event))
          (end-coords (if (or (not snap) (string= snap "nil"))
                          (posn-object-x-y end)
-                       (sketch-snap-to-grid (posn-object-x-y end) grid-param)))
+                       (sketch--snap-to-grid (posn-object-x-y end) grid-param)))
          (new-width (abs (- (car end-coords) (car start-coords))))
          (new-height (abs (- (cdr end-coords) (cdr start-coords)))))
     (setq svg-canvas (svg-create new-width new-height :stroke "gray"))
