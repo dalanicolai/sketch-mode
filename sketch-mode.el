@@ -196,9 +196,29 @@ transient."
     (,(kbd "C-c C-s") . sketch-transient))
   (undo-tree-mode))
 
+(defun sketch-mapcons (fn &rest cons-cells)
+  "Apply FN to list of car's and cdr's of CONS-CELLS.
+Return a single cons cell."
+  (cons (apply fn (mapcar #'car cons-cells))
+        (apply fn (mapcar #'cdr cons-cells))))
+
+(defun sketch-norm (vec)
+  "Return norm of a vector.
+VEC should be a cons or a list containing only number elements."
+  (let ((sum-of-squares (if (consp vec)
+                            (+ (expt (car vec) 2)
+                               (expt (cdr vec) 2))
+                          (apply #'+
+                                 (mapcar (lambda (x) (* x x))
+                                         vec)))))
+    (expt sum-of-squares (/ 1.0 (if (consp vec)
+                                    2
+                                  (length vec))))))
+
 (defun sketch--circle-radius (start-coords end-coords)
-  (sqrt (+ (expt (- (car end-coords) (car start-coords)) 2)
-           (expt (- (cdr end-coords) (cdr start-coords)) 2))))
+  (sketch-norm
+   (sketch-mapcons #'- end-coords start-coords)))
+
  (defun sketch--rectangle-coords (start-coords end-coords)
   (let ((base-coords (cons (apply #'min (list (car start-coords) (car end-coords)))
                            (apply #'min (list (cdr start-coords) (cdr end-coords))))))
