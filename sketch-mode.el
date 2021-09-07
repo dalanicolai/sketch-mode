@@ -552,7 +552,14 @@ values"
                                :y (dom-attr node 'y1)
                                :font-size 20
                                :stroke "red"
-                               :fill "red"))))
+                               :fill "red"))
+              ((or 'circle 'ellipse) (svg-text svg-labels
+                                               (dom-attr node 'id)
+                                               :x (dom-attr node 'cx)
+                                               :y (dom-attr node 'cy)
+                                               :font-size 20
+                                               :stroke "red"
+                                               :fill "red"))))
         nodes)
     svg-labels))
 
