@@ -192,7 +192,8 @@ In sketch-mode buffer press \\[sketch-transient] to activate the
 transient."
   :lighter "sketch-mode"
   :keymap
-  `(([sketch drag-mouse-1] . sketch-interactively)
+  `(
+    ;; ([sketch drag-mouse-1] . sketch-interactively)
     ;; ([C-S-drag-mouse-1] . sketch-interactively)
     (,(kbd "C-c C-s") . sketch-transient))
   (undo-tree-mode))
@@ -713,37 +714,6 @@ values"
   (svg-remove sketch-root (completing-read "Remove element with id: "
                                           (sketch-labels-list)))
   (sketch-redraw))
-;; (defun sketch-interactively (event)
-;;   "Draw object interactively, interpreting mouse event."
-;;   (interactive "e")
-;;   (let* ((start (event-start event))
-;;          (start-coords (posn-object-x-y start))
-;;          (end (event-end event))
-;;          (end-coords (posn-object-x-y end))
-;;          (grid-param (plist-get (cdr (posn-image start)) :grid-param)))
-;;     (when (or (not grid-param) (= grid-param 0))
-;;       (setq sketch-snap-to-grid nil))
-;;     (when sketch-snap-to-grid
-;;       (setq start-coords (sketch-snap-to-grid start-coords grid-param))
-;;       (setq end-coords (sketch-snap-to-grid end-coords grid-param)))
-;;     (pcase sketch-default-shape
-;;       ('line   (svg-line sketch-svg (car start-coords) (cdr start-coords) (car end-coords) (cdr end-coords)
-;;                          :marker-start (if sketch-include-start-marker
-;;                                          "url(#arrow)"
-;;                                        "none")
-;;                          :marker-mid (if sketch-include-mid-marker
-;;                                            "url(#arrow)"
-;;                                          "none")
-;;                          :marker-end (if sketch-include-end-marker
-;;                                          "url(#arrow)"
-;;                                        "none")))
-;;       ('rectangle (apply 'svg-rectangle sketch-svg (append (sketch--rectangle-coords start-coords end-coords) '(:fill "none"))))
-;;       ('circle (svg-circle sketch-svg (car start-coords) (cdr start-coords) (sketch--circle-radius start-coords end-coords)
-;;                            :fill "none"))
-;;       ('ellipse (apply 'svg-ellipse sketch-svg  (append (sketch--ellipse-coords start-coords end-coords) '(:fill "none")))))
-;;     (kill-backward-chars 1)
-;;     (insert-image (sketch-image sketch-svg :pointer 'arrow :grid-param grid-param))))
-  ;; (call-interactively 'tutorial-transient)
 
 (define-minor-mode sketch-lisp-mode
   "Minor mode for svg lisp buffers."
