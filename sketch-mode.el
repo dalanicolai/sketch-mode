@@ -40,6 +40,8 @@
 
 ;; DONE(-partially) add functionality to modify objects (see `add-object-modify-feature' branch)
 
+;; TODO add functionality to customize markers
+
 ;; TODO enable defining global svg settings (object properties)
 
 ;; TODO maybe transform relevant transient argument (strings) to variables
@@ -77,11 +79,13 @@
   :group 'Applications)
 
 (defcustom sketch-im-x-offset 7
-  "Default grid line separation distance (integer)."
+  "Horizontal offset in pixels of image position within frame.
+Set this value to correct for cursor 'bias'."
   :type 'integer)
 
 (defcustom sketch-im-y-offset 1
-  "Default grid line separation distance (integer)."
+  "Vertical offset in pixels of image position within frame.
+Set this value to correct for cursor 'bias'."
   :type 'integer)
 
 (defcustom sketch-default-image-size '(800 . 600)
@@ -705,8 +709,10 @@ values"
          (object-type (transient-arg-value "--object=" args))
          (command-and-coords (pcase object-type
                                ("line" (list 'svg-line
-                                             (car start-coords) (cdr start-coords) (car end-coords) (cdr end-coords)))
-                               ("rectangle" `(svg-rectangle ,@(sketch--rectangle-coords start-coords end-coords)))
+                                             (car start-coords) (cdr start-coords)
+                                             (car end-coords) (cdr end-coords)))
+                               ("rectangle" `(svg-rectangle
+                                              ,@(sketch--rectangle-coords start-coords end-coords)))
                                ("circle" (list 'svg-circle
                                                (car start-coords) (cdr start-coords)
                                                (sketch--circle-radius start-coords end-coords)))
@@ -738,17 +744,19 @@ values"
           (sketch sketch-root))
       (set-window-dedicated-p
        (get-buffer-window
-        (pop-to-buffer buffer '(display-buffer-in-side-window . ((side . right) (window-width . 70)))))
+        (pop-to-buffer buffer
+                       '(display-buffer-in-side-window . ((side . right) (window-width . 70)))))
        t)
     (erase-buffer)
-    (pp sketch buffer))
+    (with-current-buffer buffer
+      (dom-pp sketch)))
     (emacs-lisp-mode)
     (sketch-lisp-mode)))
 
 (transient-define-suffix sketch-copy-definition ()
   (interactive)
   (with-temp-buffer
-    (pp sketch-svg (current-buffer))
+    (dom-pp sketch-svg)
     (kill-new (buffer-string)))
   (message "SVG definition added to kill-ring"))
 
