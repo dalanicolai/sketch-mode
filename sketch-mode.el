@@ -1006,6 +1006,59 @@ PROPS is passed on to `create-image' as its PROPS list."
       (pp lisp (current-buffer))
       (end-of-buffer)))
 
+;;; import/snippets
+
+(defun sketch-snippets-add-ids (dom)
+  (let ((idx 0))
+    (dolist (n (dom-by-tag dom 'g))
+      (dom-set-attribute n 'id (number-to-string idx))
+      (setq idx (1+ idx)))))
+
+(defun sketch-snippets-add-labels (svg-file)
+  (interactive "f")
+  (let (dom)
+    (with-temp-buffer "svg"
+                      (insert-file-contents-literally svg-file)
+                      (xml-remove-comments (point-min) (point-max))
+                      (setq dom (libxml-parse-xml-region (point-min) (point-max)))
+                      (sketch-snippets-add-ids dom))
+    (mapc (lambda (n)
+            (let* ((s (dom-attr n 'transform))
+                   (coords (when s
+                             (split-string
+                              (string-trim
+                               s
+                               "translate(" ")")
+                              ","))))
+              (svg-text dom
+                        (dom-attr n 'id)
+                        :x (car coords)
+                        :y (cadr coords)
+                        :font-size 10
+                        :stroke "red"
+                        :fill "red")))
+          (cdr (dom-by-tag dom 'g)))
+    (unless sketch-mode
+      (user-error "Not in sketch-mode buffer"))
+    ;; (save-current-buffer
+      ;; (when lisp-buffer
+      ;;   (sketch-update-lisp-window lisp lisp-buffer))
+      ;; (let ((lisp-window (or (get-buffer-window "*sketch-root*")
+      ;;                        (get-buffer-window lisp-buffer))))
+      ;;   (unless (string= (buffer-name (window-buffer lisp-window)) "*sketch*")
+      ;;     (if-let (buf (get-buffer"*sketch-root*"))
+      ;;         (sketch-update-lisp-window sketch-root buf)
+      ;;       (sketch-update-lisp-window lisp lisp-buffer))))
+      ;; (setq sketch-root (append (subseq sketch-root 0 2) (list (nth (car show-layers) svg-layers))))
+      ;; (dolist (layer (cdr show-layers))
+      ;;   (setq sketch-root (append sketch-root (list (nth layer svg-layers)))))
+      ;; (setq sketch-svg (append svg-canvas
+      ;;                          (when sketch-show-grid (list sketch-grid))
+      ;;                          (when sketch-show-labels (list (sketch-labels)))
+      ;;                          (list sketch-root)))
+    (erase-buffer) ;; a (not exact) alternative is to use (kill-backward-chars 1)
+    (insert-image (svg-image dom))
+    (print dom)))
 
  (provide 'sketch-mode)
 ;;; sketch-mode.el ends here
