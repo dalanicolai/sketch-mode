@@ -42,6 +42,9 @@
 
 ;; TODO add functionality to customize markers
 
+;; TODO Add options to hide transient suffixes (e.g. commands are trivial and could be hidden to get more drawing space.
+;; unfortunately transient levels (de)activate instead of hide/show suffixes)
+
 ;; TODO enable defining global svg settings (object properties)
 
 ;; TODO maybe transform relevant transient argument (strings) to variables
@@ -105,6 +108,10 @@ default: (800 . 600)."
 
 (defcustom sketch-default-grid-parameter 25
   "Default grid line separation distance (integer)."
+  :type 'integer)
+
+(defcustom sketch-label-size 15
+  "Size of object labels."
   :type 'integer)
 
 (defcustom sketch-default-shape 'line
@@ -187,7 +194,7 @@ STOPS is a list of percentage/color pairs."
 (defun sketch-group (id &rest args)
   (apply #'svg-group
          :id id
-         :transform "translate(0 0)"
+         :transform "translate(0,0)"
          args))
 
 (define-minor-mode sketch-mode
@@ -458,8 +465,9 @@ values"
    [([sketch drag-mouse-1] "Draw object"  sketch-interactively-1)
     ([sketch mouse-1] "Draw text"  sketch-text-interactively)
     ([sketch C-S-drag-mouse-1] "Crop image" sketch-crop)]
-   [("T" "Transfrom object" sketch-modify-object)
-    ("r" "Remove object" sketch-remove-object)]
+   [("t" "Transform object" sketch-modify-object)
+    ("r" "Remove object" sketch-remove-object)
+    ("i" "Import object" sketch-import)]
     [("u" "Undo" sketch-undo)
     ("U" "Redo" sketch-redo)]
    [("d" "Show definition" sketch-show-definition)
@@ -547,23 +555,35 @@ values"
                                :x (+ (dom-attr node 'x) 2)
                                :y (+ (dom-attr node 'y)
                                      (- (dom-attr node 'height) 2))
-                               :font-size 20
+                               :font-size sketch-label-size
                                :stroke "red"
                                :fill "red"))
               ('line (svg-text svg-labels
                                (dom-attr node 'id)
                                :x (dom-attr node 'x1)
                                :y (dom-attr node 'y1)
-                               :font-size 20
+                               :font-size sketch-label-size
                                :stroke "red"
                                :fill "red"))
               ((or 'circle 'ellipse) (svg-text svg-labels
                                                (dom-attr node 'id)
                                                :x (dom-attr node 'cx)
                                                :y (dom-attr node 'cy)
-                                               :font-size 20
+                                               :font-size sketch-label-size
                                                :stroke "red"
-                                               :fill "red"))))
+                                               :fill "red"))
+              ('g (let ((s (dom-attr node
+                                     'transform)))
+                    (string-match "translate\(\\([0-9]*\\)[, ]*\\([0-9]*\\)" s)
+                    (let ((x (match-string 1 s))
+                          (y (match-string 2 s)))
+                      (svg-text svg-labels
+                                (dom-attr node 'id)
+                                :x x
+                                :y y
+                                :font-size sketch-label-size
+                                :stroke "red"
+                                :fill "red"))))))
         nodes)
     svg-labels))
 
@@ -591,7 +611,8 @@ values"
                            ("line" "l")
                            ("rectangle" "r")
                            ("circle" "c")
-                           ("ellipse" "e"))))
+                           ("ellipse" "e")
+                           ("group" "g"))))
          (idx 0)
          (label (concat prefix (number-to-string idx)))
          (labels (sketch-labels-list)))
@@ -680,6 +701,7 @@ values"
                                                                                     (cddr coords)))))))))
                   (prin1-to-string sketch-root))))
 
+
 (transient-define-suffix sketch-interactively-1 (event)
   (interactive "@e")
   (let* ((args (when transient-current-prefix (transient-args 'sketch-transient)))
@@ -727,6 +749,38 @@ values"
   (svg-remove sketch-root (completing-read "Remove element with id: "
                                           (sketch-labels-list)))
   (sketch-redraw))
+
+(transient-define-suffix sketch-insert-snippet (event)
+  (interactive "@e")
+  (let ((coords (posn-object-x-y (event-start event)))
+        (node (oref transient-current-prefix :value))
+        (label (sketch-create-label "group")))
+    (dom-set-attribute node
+                       'transform
+                       (format "translate(%s,%s)" (car coords) (cdr coords)))
+    (dom-set-attribute node
+                       'id
+                       label)
+    (dom-append-child (nth active-layer sketch-layers-list) node)
+    (sketch-redraw)
+    (sketch-modify-object label)))
+
+;; (transient-define-suffix print-hello ()
+;;   (interactive)
+
+(transient-define-prefix sketch-import (svg-file)
+  [("p" "print args" print-hello)
+   ([sketch mouse-1] "Insert"  sketch-insert-snippet)]
+  (interactive "fImport object from file: ")
+  (let ((dom (sketch-snippet-get-dom svg-file)))
+    (sketch-snippets-add-labels dom)
+    (let* ((idx (read-number "Number of object for import: "))
+           (snippet (dom-elements dom 'id (number-to-string idx))))
+      (sketch-redraw)
+      (transient-setup 'sketch-import nil nil :value (car snippet)))))
+
+;; (transient-define-suffix sketch-import-object (svg-file)
+;;   (interactive "fImport object from file: ")
 
 (define-minor-mode sketch-lisp-mode
   "Minor mode for svg lisp buffers."
@@ -941,6 +995,42 @@ PROPS is passed on to `create-image' as its PROPS list."
     (cl-incf (alist-get coord props) amount))
   (sketch-redraw object-def buffer))
 
+(defun sketch-parse-transform-value (value)
+  (let ((transforms (mapcar (lambda (val)
+                              (split-string val "[(,)]" t))
+                            (split-string value))))
+    (mapcar (lambda (x)
+              (cons (intern (car x)) (mapcar (lambda (val)
+                                      (string-to-number val))
+                                    (cdr x))))
+            transforms)))
+
+(defun sketch-format-transfrom-value (value)
+  (string-join (mapcar (lambda (x) (concat (symbol-name (car x))
+                                           "("
+                                           (number-to-string (cadr x))
+                                           (if-let (y (caddr x))
+                                               (concat "," (number-to-string y)))
+                                           ")"))
+                       value)
+               " "))
+
+(defun sketch-group-translate (buffer object-def direction &optional fast)
+  (let ((transform (sketch-parse-transform-value
+                (dom-attr object-def
+                          'transform)))
+        (dist (if fast
+                  10
+                1)))
+    (pcase direction
+      ('up (cl-decf (cadr (alist-get 'translate transform)) dist))
+      ('down (cl-incf (cadr (alist-get 'translate transform)) dist)))
+    (dom-set-attribute object-def
+                       'transform
+                       (sketch-format-transfrom-value transform))
+    object-def
+    (sketch-redraw object-def buffer)))
+
 ;; TODO 'refactor' subsequent suffixes (e.g. create general function/macro)
 (transient-define-suffix sketch-translate-down (args)
   (interactive (list (oref transient-current-prefix :value)))
@@ -948,7 +1038,12 @@ PROPS is passed on to `create-image' as its PROPS list."
          (buffer (transient-arg-value "--buffer=" args))
          (object-def (dom-by-id sketch-svg (format "^%s$" object)))
          (props (cadar object-def)))
-    (sketch-translate-object buffer object-def props '(y1 y2) 1)))
+    (if (eq (caar object-def) 'g)
+        (sketch-group-translate buffer (car object-def) 'down)
+    (sketch-translate-object buffer
+                             object-def
+                             props
+                             '(y1 y2) 1))))
 
 (transient-define-suffix sketch-translate-fast-down (args)
   (interactive (list (oref transient-current-prefix :value)))
@@ -956,7 +1051,14 @@ PROPS is passed on to `create-image' as its PROPS list."
          (buffer (transient-arg-value "--buffer=" args))
          (object-def (dom-by-id sketch-svg (format "^%s$" object)))
          (props (cadar object-def)))
-    (sketch-translate-object buffer object-def props '(y1 y2) 10)))
+    (if (eq (caar object-def) 'g)
+        (sketch-group-translate buffer (car object-def) 'down t)
+    (sketch-translate-object buffer
+                             object-def
+                             props
+                             (pcase (caar object-def)
+                               ('line '(y1 y2)))
+                             10))))
 
 (transient-define-suffix sketch-translate-up (args)
   (interactive (list (oref transient-current-prefix :value)))
@@ -964,7 +1066,14 @@ PROPS is passed on to `create-image' as its PROPS list."
          (buffer (transient-arg-value "--buffer=" args))
          (object-def (dom-by-id sketch-svg (format "^%s$" object)))
          (props (cadar object-def)))
-    (sketch-translate-object buffer object-def props '(y1 y2) -1)))
+    (if (eq (caar object-def) 'g)
+        (sketch-group-translate buffer (car object-def) 'up)
+    (sketch-translate-object buffer
+                             object-def
+                             props
+                             (pcase (caar object-def)
+                               ('line '(y1 y2)))
+                             -1))))
 
 (transient-define-suffix sketch-translate-fast-up (args)
   (interactive (list (oref transient-current-prefix :value)))
@@ -972,9 +1081,16 @@ PROPS is passed on to `create-image' as its PROPS list."
          (buffer (transient-arg-value "--buffer=" args))
          (object-def (dom-by-id sketch-svg (format "^%s$" object)))
          (props (cadar object-def)))
-    (sketch-translate-object buffer object-def props '(y1 y2) -10)))
+    (if (eq (caar object-def) 'g)
+        (sketch-group-translate buffer (car object-def) 'up t)
+    (sketch-translate-object buffer
+                             object-def
+                             props
+                             (pcase (caar object-def)
+                               ('line '(y1 y2)))
+                             -10))))
 
-(transient-define-prefix sketch-modify-object ()
+(transient-define-prefix sketch-modify-object (&optional group)
   "Set object properties."
   :transient-suffix 'transient--do-call
   ["Properties"
@@ -986,8 +1102,10 @@ PROPS is passed on to `create-image' as its PROPS list."
   [("l" sketch-cycle-labels)
    ("q" "Quit" transient-quit-one)]
   (interactive)
-  (let* ((object (completing-read "Transform element with id: "
-                                 (sketch-labels-list)))
+  (let* ((object (if group
+                     group
+                   (completing-read "Transform element with id: "
+                                    (sketch-labels-list))))
          (buffer (get-buffer-create (format "*sketch-object-%s*" object))))
     (display-buffer buffer '(display-buffer-in-side-window . ((side . right) (window-width . 70))))
     (pp (cadar (dom-by-id sketch-svg (format "^%s$" object))) buffer)
@@ -1008,57 +1126,58 @@ PROPS is passed on to `create-image' as its PROPS list."
 
 ;;; import/snippets
 
+(defun sketch-snippet-get-dom (svg-file)
+  (interactive "fCreate dom from file: ")
+  (with-temp-buffer "svg"
+                    (insert-file-contents-literally svg-file)
+                    (xml-remove-comments (point-min) (point-max))
+                    (libxml-parse-xml-region (point-min) (point-max))))
+
 (defun sketch-snippets-add-ids (dom)
   (let ((idx 0))
     (dolist (n (dom-by-tag dom 'g))
       (dom-set-attribute n 'id (number-to-string idx))
       (setq idx (1+ idx)))))
 
-(defun sketch-snippets-add-labels (svg-file)
+(defun sketch-snippets-add-labels (dom)
   (interactive "f")
-  (let (dom)
-    (with-temp-buffer "svg"
-                      (insert-file-contents-literally svg-file)
-                      (xml-remove-comments (point-min) (point-max))
-                      (setq dom (libxml-parse-xml-region (point-min) (point-max)))
-                      (sketch-snippets-add-ids dom))
-    (mapc (lambda (n)
-            (let* ((s (dom-attr n 'transform))
-                   (coords (when s
-                             (split-string
-                              (string-trim
-                               s
-                               "translate(" ")")
-                              ","))))
-              (svg-text dom
-                        (dom-attr n 'id)
-                        :x (car coords)
-                        :y (cadr coords)
-                        :font-size 10
-                        :stroke "red"
-                        :fill "red")))
-          (cdr (dom-by-tag dom 'g)))
-    (unless sketch-mode
-      (user-error "Not in sketch-mode buffer"))
-    ;; (save-current-buffer
-      ;; (when lisp-buffer
-      ;;   (sketch-update-lisp-window lisp lisp-buffer))
-      ;; (let ((lisp-window (or (get-buffer-window "*sketch-root*")
-      ;;                        (get-buffer-window lisp-buffer))))
-      ;;   (unless (string= (buffer-name (window-buffer lisp-window)) "*sketch*")
-      ;;     (if-let (buf (get-buffer"*sketch-root*"))
-      ;;         (sketch-update-lisp-window sketch-root buf)
-      ;;       (sketch-update-lisp-window lisp lisp-buffer))))
-      ;; (setq sketch-root (append (subseq sketch-root 0 2) (list (nth (car show-layers) svg-layers))))
-      ;; (dolist (layer (cdr show-layers))
-      ;;   (setq sketch-root (append sketch-root (list (nth layer svg-layers)))))
-      ;; (setq sketch-svg (append svg-canvas
-      ;;                          (when sketch-show-grid (list sketch-grid))
-      ;;                          (when sketch-show-labels (list (sketch-labels)))
-      ;;                          (list sketch-root)))
-    (erase-buffer) ;; a (not exact) alternative is to use (kill-backward-chars 1)
-    (insert-image (svg-image dom))
-    (print dom)))
+  (sketch-snippets-add-ids dom)
+  (mapc (lambda (n)
+          (let* ((s (dom-attr n 'transform))
+                 (coords (when s
+                           (split-string
+                            (string-trim
+                             s
+                             "translate(" ")")
+                            ","))))
+            (svg-text dom
+                      (dom-attr n 'id)
+                      :x (car coords)
+                      :y (cadr coords)
+                      :font-size 10
+                      :stroke "red"
+                      :fill "red")))
+        (cdr (dom-by-tag dom 'g)))
+  (unless sketch-mode
+    (user-error "Not in sketch-mode buffer"))
+  ;; (save-current-buffer
+  ;; (when lisp-buffer
+  ;;   (sketch-update-lisp-window lisp lisp-buffer))
+  ;; (let ((lisp-window (or (get-buffer-window "*sketch-root*")
+  ;;                        (get-buffer-window lisp-buffer))))
+  ;;   (unless (string= (buffer-name (window-buffer lisp-window)) "*sketch*")
+  ;;     (if-let (buf (get-buffer"*sketch-root*"))
+  ;;         (sketch-update-lisp-window sketch-root buf)
+  ;;       (sketch-update-lisp-window lisp lisp-buffer))))
+  ;; (setq sketch-root (append (subseq sketch-root 0 2) (list (nth (car show-layers) svg-layers))))
+  ;; (dolist (layer (cdr show-layers))
+  ;;   (setq sketch-root (append sketch-root (list (nth layer svg-layers)))))
+  ;; (setq sketch-svg (append svg-canvas
+  ;;                          (when sketch-show-grid (list sketch-grid))
+  ;;                          (when sketch-show-labels (list (sketch-labels)))
+  ;;                          (list sketch-root)))
+  (erase-buffer) ;; a (not exact) alternative is to use (kill-backward-chars 1)
+  (insert-image (svg-image dom)))
 
- (provide 'sketch-mode)
+(provide 'sketch-mode)
 ;;; sketch-mode.el ends here
