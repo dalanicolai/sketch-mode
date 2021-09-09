@@ -75,9 +75,10 @@
   Add the following lines to =dotspacemacs-additional-packages=
   
 #+begin_src emacs-lisp :tangle yes
-     (sketch-mode :location (recipe
-                        :fetcher github
-                        :repo "dalanicolai/sketch-mode"))
+  (sketch-mode :location (recipe
+                     :fetcher github
+                     :repo "dalanicolai/sketch-mode"
+                     :files ("*.el" "snippet-files")))
 #+end_src
 
   Subsequently load the packages by adding the following line to =dotspacemacs/user-config=
@@ -93,8 +94,6 @@
   package, the usage is more or less self explanatory, it is wise to take note
   of the following comments:
 
-  - the undo/redo functionality is really basic, and does not work for all actions
-    (e.g. does not work yet when removing object or cropping images).
   - to remove an object (without using undo), you should toggle labels by
     pressing =l=, and then to remove an object enter its label after pressing
     =R=.
