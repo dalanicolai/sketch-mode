@@ -448,14 +448,15 @@ else return nil"
   [["General definitions"
     ("c" "stroke-color" sketch-stroke-color)
     ("C" "fill-color" sketch-fill-color)
-    ("w" "stroke-width" sketch-stroke-width)]
+    ("w" "stroke-width" sketch-stroke-width)
+    ("d" "stroke-dasharray" sketch-dasharray)]
    ["Object definitions"
     ("o" "object" sketch-object)
     ("m" "end-marker" sketch-object-marker)]
    ["Font definitions"
-    ("-f" "family" sketch-select-font)
-    ("-w" "font-weight" sketch-font-weight)
-    ("-s" "font-size" sketch-font-size)]]
+    ("ff" "family" sketch-select-font)
+    ("fw" "font-weight" sketch-font-weight)
+    ("fs" "font-size" sketch-font-size)]]
    [["Grid"
     ("s" "Snap to grid" sketch-snap)
     ("g" "Toggle grid" sketch-toggle-grid)]
@@ -474,8 +475,8 @@ else return nil"
     ("i" "Import object" sketch-import)]
     [("u" "Undo" sketch-undo)
     ("U" "Redo" sketch-redo)]
-   [("d" "Show definition" sketch-show-definition)
-    ("D" "Copy definition" sketch-copy-definition)
+   [("D" "Show definition" sketch-show-definition)
+    ("K" "Copy definition" sketch-copy-definition)
     ("S" "Save image" sketch-save)]
    [("q" "Quit transient"           transient-quit-one)]])
 
@@ -485,14 +486,6 @@ else return nil"
   :argument "--object="
   :choices '("rectangle" "circle" "ellipse")
   :default "line")
-
-(transient-define-infix sketch-stroke-width ()
-  :description "Option with list"
-  :class 'transient-option
-  :argument "--stroke-width="
-  :choices (mapcar (lambda (x)
-                     (number-to-string x))
-                   (number-sequence 1 100)))
 
 (transient-define-infix sketch-stroke-color ()
   :description "Option with list"
@@ -504,6 +497,21 @@ else return nil"
   :description "Option with list"
   :class 'sketch-variable:colors
   :argument "--fill-color="
+  :default "none")
+
+(transient-define-infix sketch-stroke-width ()
+  :description "Option with list"
+  :class 'transient-option
+  :argument "--stroke-width="
+  :choices (mapcar (lambda (x)
+                     (number-to-string x))
+                   (number-sequence 1 100)))
+
+(transient-define-infix sketch-dasharray ()
+  :description "stroke-dasharray"
+  :class 'sketch-variable:choices
+  :argument "--stroke-dasharray="
+  :choices '("8" "8,4")
   :default "none")
 
 (transient-define-infix sketch-object-marker ()
@@ -725,6 +733,8 @@ else return nil"
                              (transient-arg-value "--stroke-color=" args)
                              :fill
                              (transient-arg-value "--fill-color=" args)
+                             :stroke-dasharray
+                             (transient-arg-value "--stroke-dasharray=" args)
                              :marker-end (if args (pcase (transient-arg-value "--marker=" args)
                                                     ("arrow" "url(#arrow)")
                                                     ("dot" "url(#dot)")
@@ -885,7 +895,7 @@ else return nil"
                              ;;               (if sketch-include-end-marker
                              ;;                   "url(#arrow)"
                              ;;                 "none"))))
-    (apply #'svg-text (nth active-layer sketch-layers-list) text :x (car coords) :y (cdr coords) object-props))
+    (apply #'svg-text (nth active-layer sketch-layers-list) text :x (car coords) :y (cdr coords) :id (sketch-create-label "text") object-props))
     (sketch-redraw))
 
 (transient-define-infix sketch-select-font ()
