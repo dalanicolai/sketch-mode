@@ -584,6 +584,14 @@ else return nil"
                                                :font-size sketch-label-size
                                                :stroke "red"
                                                :fill "red"))
+              ('text (svg-text svg-labels
+                               (dom-attr node 'id)
+                               :x (dom-attr node 'x)
+                               :y (+ (dom-attr node 'y)
+                                     sketch-label-size)
+                               :font-size sketch-label-size
+                               :stroke "red"
+                               :fill "red"))
               ('g (let ((s (dom-attr node
                                      'transform)))
                     (string-match "translate\(\\([0-9]*\\)[, ]*\\([0-9]*\\)" s)
@@ -624,6 +632,7 @@ else return nil"
                            ("rectangle" "r")
                            ("circle" "c")
                            ("ellipse" "e")
+                           ("text" "t")
                            ("group" "g"))))
          (idx 0)
          (label (concat prefix (number-to-string idx)))
@@ -1103,7 +1112,6 @@ PROPS is passed on to `create-image' as its PROPS list."
          (object-def (dom-by-id sketch-svg (format "^%s$" object))))
     (sketch-group-scale buffer (car object-def) 'down t)))
 
-
 ;; TODO 'refactor' subsequent suffixes (e.g. create general function/macro)
 (transient-define-suffix sketch-translate-down (args)
   (interactive (list (oref transient-current-prefix value)))
@@ -1116,7 +1124,10 @@ PROPS is passed on to `create-image' as its PROPS list."
     (sketch-translate-object buffer
                              object-def
                              props
-                             '(y1 y2) 1))))
+                             (pcase (caar object-def)
+                               ('line '(y1 y2))
+                               ('text '(y)))
+                             1))))
 
 (transient-define-suffix sketch-translate-fast-down (args)
   (interactive (list (oref transient-current-prefix value)))
@@ -1130,7 +1141,8 @@ PROPS is passed on to `create-image' as its PROPS list."
                              object-def
                              props
                              (pcase (caar object-def)
-                               ('line '(y1 y2)))
+                               ('line '(y1 y2))
+                               ('text '(y)))
                              10))))
 
 (transient-define-suffix sketch-translate-up (args)
@@ -1145,7 +1157,8 @@ PROPS is passed on to `create-image' as its PROPS list."
                              object-def
                              props
                              (pcase (caar object-def)
-                               ('line '(y1 y2)))
+                               ('line '(y1 y2))
+                               ('text '(y)))
                              -1))))
 
 (transient-define-suffix sketch-translate-fast-up (args)
@@ -1160,7 +1173,8 @@ PROPS is passed on to `create-image' as its PROPS list."
                              object-def
                              props
                              (pcase (caar object-def)
-                               ('line '(y1 y2)))
+                               ('line '(y1 y2))
+                               ('text '(y)))
                              -10))))
 
 (transient-define-prefix sketch-modify-object (&optional group)
