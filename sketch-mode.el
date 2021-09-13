@@ -561,7 +561,7 @@ else return nil"
                                                 show-layers)))))
         (svg-labels (sketch-group "labels")))
     (mapc (lambda (node)
-            (pcase (car node)
+            (pcase (dom-tag node)
               ('rect (svg-text svg-labels
                                (dom-attr node 'id)
                                :x (+ (dom-attr node 'x) 2)
@@ -660,7 +660,7 @@ else return nil"
 (defun sketch--svg-translate (dx dy)
   (interactive)
   (mapcar (lambda (node)
-            (pcase (car node)
+            (pcase (dome-tag node)
               ('line (sketch-translate-node-coords node dx 'x1 'x2)
                      (sketch-translate-node-coords node dy 'y1 'y2))
               ('rect (sketch-translate-node-coords node dx 'x)
@@ -846,6 +846,7 @@ else return nil"
   (let ((def (read (buffer-string))))
     (with-current-buffer "*sketch*"
       (setq sketch-root def)
+      (setq sketch-layers-list (dom-by-id sketch-root "layer"))
       (sketch-redraw))))
 
 ;; (defvar sketch-undo-redo nil)
