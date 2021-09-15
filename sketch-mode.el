@@ -253,7 +253,7 @@ VEC should be a cons or a list containing only number elements."
 (defvar-local sketch-grid nil)
 (defvar-local sketch-root nil)
 (defvar-local sketch-layers-list nil)
-(defvar-local show-layers '(0))
+(defvar-local show-layers nil)
 
 (defun sketch--create-canvas (width height &optional grid-parameter)
   "Create canvas of size WIDTH x HEIGHT for drawing svg.
@@ -277,7 +277,8 @@ Optionally set a custom GRID-PARAMETER (default is value of
           (setq dash (if dash nil t)))))
     (setq sketch-svg (append svg-canvas (when sketch-show-grid (list sketch-grid))))
     (setq sketch-root (sketch-group "root"))
-    (sketch-add-layer)
+    (setq sketch-layers-list (list (sketch-group "layer-0")))
+    (setq show-layers '(0))
     (insert-image (sketch-image sketch-svg
                                 :grid-param grid-parameter
                                 :pointer 'arrow
@@ -538,7 +539,8 @@ else return nil"
   ;; (let ((variable (oref obj variable)))
   (oset obj value value)
   (setq sketch-show-labels value)
-  (auto-revert-buffers)
+  ;; (auto-revert-buffers)
+  (transient--redisplay)
   (sketch-redraw))
   ;; (unless (or value transient--prefix)
   ;;   (message "Unset %s" variable)))
@@ -660,7 +662,7 @@ else return nil"
 (defun sketch--svg-translate (dx dy)
   (interactive)
   (mapcar (lambda (node)
-            (pcase (dome-tag node)
+            (pcase (dom-tag node)
               ('line (sketch-translate-node-coords node dx 'x1 'x2)
                      (sketch-translate-node-coords node dy 'y1 'y2))
               ('rect (sketch-translate-node-coords node dx 'x)
@@ -971,11 +973,21 @@ else return nil"
 
 (transient-define-suffix sketch-add-layer ()
   (interactive)
-  (setq sketch-layers-list (append sketch-layers-list
-                           (list (sketch-group (format "layer-%s" (length sketch-layers-list))))))
+  (let ((new-layer (length sketch-layers-list))
+        (active-layer-infix (object-assoc "Active layer" 'description transient-current-suffixes))
+        (show-layers-infix (object-assoc "Show layers" 'description transient-current-suffixes)))
+    (setq sketch-layers-list (append sketch-layers-list
+                                     (list (sketch-group (format "layer-%s" new-layer)))))
+    (setq active-layer new-layer)
+    (setq show-layers (append show-layers (list new-layer)))
+    (print (transient-infix-set active-layer-infix new-layer))
+    (propertize (prin1-to-string (oref active-layer-infix value))
+                'face 'transient-value)
+    (print (transient-infix-set show-layers-infix show-layers)))
+  (transient--redisplay)
   (message "Existing layers (indices): %s" (mapconcat #'number-to-string
-                                            (number-sequence 0 (1- (length sketch-layers-list)))
-                                            ", ")))
+                                                      (number-sequence 0 (1- (length sketch-layers-list)))
+                                                      ", ")))
 
 (transient-define-infix sketch-layers ()
   "List with layers that should be added to the image.
