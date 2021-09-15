@@ -234,13 +234,13 @@ VEC should be a cons or a list containing only number elements."
   (sketch-norm
    (sketch-mapcons #'- end-coords start-coords)))
 
- (defun sketch--rectangle-coords (start-coords end-coords)
+(defun sketch--rectangle-coords (start-coords end-coords)
   (let ((base-coords (cons (apply #'min (list (car start-coords) (car end-coords)))
                            (apply #'min (list (cdr start-coords) (cdr end-coords))))))
-  (list (car base-coords)
-        (cdr base-coords)
-        (abs (- (car end-coords) (car start-coords)))
-        (abs (- (cdr end-coords) (cdr start-coords))))))
+    (list (car base-coords)
+          (cdr base-coords)
+          (abs (- (car end-coords) (car start-coords)))
+          (abs (- (cdr end-coords) (cdr start-coords))))))
 
 (defun sketch--ellipse-coords (start-coords end-coords)
   (list (/ (+ (car start-coords) (car end-coords)) 2)
@@ -305,6 +305,7 @@ Optionally set a custom GRID-PARAMETER (default is value of
 With prefix ARG, create sketch using default (customizable)
 values"
   (interactive "P")
+  ;; (setq max-mini-window-height 2)
   (let ((buffer (get-buffer "*sketch*")))
     (if buffer
         (progn (switch-to-buffer buffer)
@@ -389,7 +390,7 @@ else return nil"
 ;; We always call the autoloaded `color-name-to-rgb' before calling this
 ;; function, so we know it's available even tho the compiler doesn't.
 (declare-function color-rgb-to-hex "color"
-                                     (red green blue &optional digits-per-component))
+                  (red green blue &optional digits-per-component))
 
 (cl-defmethod transient-format-value ((obj sketch-variable:colors))
   (let ((value (oref obj value))
@@ -406,41 +407,41 @@ else return nil"
                 (propertize (apply #'color-rgb-to-hex (color-name-to-rgb default))
                             'face 'transient-inactive-argument))))))
 
-  ;; (let* ((args (when transient-current-prefix (transient-args 'sketch-transient)))
-  ;;        (print event))))
-    ;;      (start (event-start event))
-    ;;      (grid-param (plist-get (cdr (posn-image start)) :grid-param))
-    ;;      (snap (transient-arg-value "--snap-to-grid=" args))
-    ;;      (start-coords (if (or (not snap) (string= snap "nil"))
-    ;;                       (posn-object-x-y start)
-    ;;                     (sketch--snap-to-grid (posn-object-x-y start) grid-param)))
-    ;;      (end (event-end event))
-    ;;      (end-coords (if (or (not snap) (string= snap "nil"))
-    ;;                     (posn-object-x-y end)
-    ;;                   (sketch--snap-to-grid (posn-object-x-y end) grid-param)))
-    ;;      (object-props (list :stroke-width
-    ;;                          (transient-arg-value "--stroke-width=" args)
-    ;;                          :stroke
-    ;;                          (transient-arg-value "--stroke-color=" args)
-    ;;                          :fill
-    ;;                          (transient-arg-value "--fill-color=" args)
-    ;;                          :marker-end (if args (pcase (transient-arg-value "--marker=" args)
-    ;;                                                 ("arrow" "url(#arrow)")
-    ;;                                                 ("point" "url(#point)")
-    ;;                                                 (_ "none"))
-    ;;                                        (if sketch-include-end-marker
-    ;;                                            "url(#arrow)"
-    ;;                                          "none"))))
-    ;;      (command-and-coords (pcase (transient-arg-value "--object=" args)
-    ;;                            ("line" (list 'svg-line
-    ;;                                          (car start-coords) (cdr start-coords) (car end-coords) (cdr end-coords)))
-    ;;                            ("rectangle" `(svg-rectangle ,@(sketch--rectangle-coords start-coords end-coords)))
-    ;;                            ("circle" (list 'svg-circle
-    ;;                                            (car start-coords) (cdr start-coords)
-    ;;                                            (sketch--circle-radius start-coords end-coords)))
-    ;;                            ("ellipse" `(svg-ellipse ,@(sketch--ellipse-coords start-coords end-coords))))))
-    ;; (apply (car command-and-coords) sketch-root `(,@(cdr command-and-coords) ,@object-props :id ,(sketch-create-label)))
-    ;; (sketch-redraw)))
+;; (let* ((args (when transient-current-prefix (transient-args 'sketch-transient)))
+;;        (print event))))
+;;      (start (event-start event))
+;;      (grid-param (plist-get (cdr (posn-image start)) :grid-param))
+;;      (snap (transient-arg-value "--snap-to-grid=" args))
+;;      (start-coords (if (or (not snap) (string= snap "nil"))
+;;                       (posn-object-x-y start)
+;;                     (sketch--snap-to-grid (posn-object-x-y start) grid-param)))
+;;      (end (event-end event))
+;;      (end-coords (if (or (not snap) (string= snap "nil"))
+;;                     (posn-object-x-y end)
+;;                   (sketch--snap-to-grid (posn-object-x-y end) grid-param)))
+;;      (object-props (list :stroke-width
+;;                          (transient-arg-value "--stroke-width=" args)
+;;                          :stroke
+;;                          (transient-arg-value "--stroke-color=" args)
+;;                          :fill
+;;                          (transient-arg-value "--fill-color=" args)
+;;                          :marker-end (if args (pcase (transient-arg-value "--marker=" args)
+;;                                                 ("arrow" "url(#arrow)")
+;;                                                 ("point" "url(#point)")
+;;                                                 (_ "none"))
+;;                                        (if sketch-include-end-marker
+;;                                            "url(#arrow)"
+;;                                          "none"))))
+;;      (command-and-coords (pcase (transient-arg-value "--object=" args)
+;;                            ("line" (list 'svg-line
+;;                                          (car start-coords) (cdr start-coords) (car end-coords) (cdr end-coords)))
+;;                            ("rectangle" `(svg-rectangle ,@(sketch--rectangle-coords start-coords end-coords)))
+;;                            ("circle" (list 'svg-circle
+;;                                            (car start-coords) (cdr start-coords)
+;;                                            (sketch--circle-radius start-coords end-coords)))
+;;                            ("ellipse" `(svg-ellipse ,@(sketch--ellipse-coords start-coords end-coords))))))
+;; (apply (car command-and-coords) sketch-root `(,@(cdr command-and-coords) ,@object-props :id ,(sketch-create-label)))
+;; (sketch-redraw)))
 
 (transient-define-prefix sketch-transient ()
   "Some Emacs magic"
@@ -458,7 +459,7 @@ else return nil"
     ("ff" "family" sketch-select-font)
     ("fw" "font-weight" sketch-font-weight)
     ("fs" "font-size" sketch-font-size)]]
-   [["Grid"
+  [["Grid"
     ("s" "Snap to grid" sketch-snap)
     ("g" "Toggle grid" sketch-toggle-grid)]
    ["Labels"
@@ -474,7 +475,7 @@ else return nil"
    [("t" "Transform object" sketch-modify-object)
     ("r" "Remove object" sketch-remove-object)
     ("i" "Import object" sketch-import)]
-    [("u" "Undo" sketch-undo)
+   [("u" "Undo" sketch-undo)
     ("U" "Redo" sketch-redo)]
    [("D" "Show definition" sketch-show-definition)
     ("K" "Copy definition" sketch-copy-definition)
@@ -542,8 +543,8 @@ else return nil"
   ;; (auto-revert-buffers)
   (transient--redisplay)
   (sketch-redraw))
-  ;; (unless (or value transient--prefix)
-  ;;   (message "Unset %s" variable)))
+;; (unless (or value transient--prefix)
+;;   (message "Unset %s" variable)))
 
 (transient-define-infix sketch-cycle-labels ()
   :description "Show labels"
@@ -606,7 +607,7 @@ else return nil"
                                 :font-size sketch-label-size
                                 :stroke "red"
                                 :fill "red"))))))
-        nodes)
+          nodes)
     svg-labels))
 
 (defun sketch-labels-list ()
@@ -652,8 +653,8 @@ else return nil"
 
 (defun sketch-list-layers ()
   (mapcar #'number-to-string (number-sequence 0 (length sketch-layers-list))))
-  ;; (with-current-buffer (get-buffer "*sketch*")
-  ;;   (mapcar (lambda (layer) (alist-get 'id (cadr layer))) sketch-layers-list)))
+;; (with-current-buffer (get-buffer "*sketch*")
+;;   (mapcar (lambda (layer) (alist-get 'id (cadr layer))) sketch-layers-list)))
 
 (defun sketch-translate-node-coords (node amount &rest args)
   (dolist (coord args node)
@@ -673,22 +674,22 @@ else return nil"
               ('text (sketch-translate-node-coords node dx 'x)
                      (sketch-translate-node-coords node dy 'y))))
           (cddr (nth active-layer sketch-layers-list))))
-  ;; (let ((node (car (dom-by-id svg-sketch label))))
-  ;;   (pcase (car node)
-  ;;     ('g (setf (alist-get 'transform (cadr node))
-  ;;               (format "translate(%s %s)" (- dx) (- dy))))
-  ;;     ;; ('line (sketch-translate-node-coords node dx 'x1 'x2)
-  ;;     ;;        (sketch-translate-node-coords node dy 'y1 'y2))
-  ;;     ;; ('rect (sketch-translate-node-coords node dx 'x)
-  ;;     ;;        (sketch-translate-node-coords node dy 'y))
-  ;;     ;; ((or 'circle 'ellipse)
-  ;;     ;;  (sketch-translate-node-coords node dx 'cx)
-  ;;     ;;  (sketch-translate-node-coords node dy 'cy))
-  ;;     ;; ('text (sketch-translate-node-coords node dx 'x)
-  ;;     ;;        (sketch-translate-node-coords node dy 'y)))
+;; (let ((node (car (dom-by-id svg-sketch label))))
+;;   (pcase (car node)
+;;     ('g (setf (alist-get 'transform (cadr node))
+;;               (format "translate(%s %s)" (- dx) (- dy))))
+;;     ;; ('line (sketch-translate-node-coords node dx 'x1 'x2)
+;;     ;;        (sketch-translate-node-coords node dy 'y1 'y2))
+;;     ;; ('rect (sketch-translate-node-coords node dx 'x)
+;;     ;;        (sketch-translate-node-coords node dy 'y))
+;;     ;; ((or 'circle 'ellipse)
+;;     ;;  (sketch-translate-node-coords node dx 'cx)
+;;     ;;  (sketch-translate-node-coords node dy 'cy))
+;;     ;; ('text (sketch-translate-node-coords node dx 'x)
+;;     ;;        (sketch-translate-node-coords node dy 'y)))
 
-  ;;     ) ;; TODO make it work for all types of elements
-  ;;   node))
+;;     ) ;; TODO make it work for all types of elements
+;;   node))
 
 (defun sketch-redraw (&optional lisp lisp-buffer)
   (unless sketch-mode
@@ -732,12 +733,12 @@ else return nil"
          (grid-param (plist-get (cdr (posn-image start)) :grid-param))
          (snap (transient-arg-value "--snap-to-grid=" args))
          (start-coords (if (or (not snap) (string= snap "nil"))
-                          (posn-object-x-y start)
-                        (sketch--snap-to-grid (posn-object-x-y start) grid-param)))
+                           (posn-object-x-y start)
+                         (sketch--snap-to-grid (posn-object-x-y start) grid-param)))
          (end (event-end event))
          (end-coords (if (or (not snap) (string= snap "nil"))
-                        (posn-object-x-y end)
-                      (sketch--snap-to-grid (posn-object-x-y end) grid-param)))
+                         (posn-object-x-y end)
+                       (sketch--snap-to-grid (posn-object-x-y end) grid-param)))
          (object-props (list :stroke-width
                              (transient-arg-value "--stroke-width=" args)
                              :stroke
@@ -772,7 +773,7 @@ else return nil"
 (transient-define-suffix sketch-remove-object ()
   (interactive)
   (svg-remove sketch-root (completing-read "Remove element with id: "
-                                          (sketch-labels-list)))
+                                           (sketch-labels-list)))
   (sketch-redraw))
 
 (transient-define-suffix sketch-insert-snippet (event)
@@ -830,9 +831,9 @@ else return nil"
         (pop-to-buffer buffer
                        '(display-buffer-in-side-window . ((side . right) (window-width . 70)))))
        t)
-    (erase-buffer)
-    (with-current-buffer buffer
-      (dom-pp sketch)))
+      (erase-buffer)
+      (with-current-buffer buffer
+        (dom-pp sketch)))
     (emacs-lisp-mode)
     (sketch-lisp-mode)))
 
@@ -863,10 +864,10 @@ else return nil"
   (setq sketch-root (read (buffer-string)))
   (setq sketch-layers-list (dom-elements sketch-root 'id "layer"))
   (unless sketch-layers-list (sketch-add-layer)))
-  ;; (let ((sketch-reverse (nreverse sketch-root)))
-  ;;   (push (pop sketch-reverse) sketch-undo-redo)
-  ;;   (setq sketch-root (nreverse sketch-reverse)))
-  ;; (sketch-redraw))
+;; (let ((sketch-reverse (nreverse sketch-root)))
+;;   (push (pop sketch-reverse) sketch-undo-redo)
+;;   (setq sketch-root (nreverse sketch-reverse)))
+;; (sketch-redraw))
 
 (transient-define-suffix sketch-redo (count)
   (interactive "*p")
@@ -878,10 +879,10 @@ else return nil"
   (setq sketch-root (read (buffer-string)))
   (setq sketch-layers-list (dom-elements sketch-root 'id "layer"))
   (unless sketch-layers-list (sketch-add-layer)))
-  ;; (let ((sketch-reverse (nreverse sketch-root)))
-  ;;   (push (pop sketch-undo-redo) sketch-reverse)
-  ;;   (setq sketch-root (nreverse sketch-reverse)))
-  ;; (sketch-redraw))
+;; (let ((sketch-reverse (nreverse sketch-root)))
+;;   (push (pop sketch-undo-redo) sketch-reverse)
+;;   (setq sketch-root (nreverse sketch-reverse)))
+;; (sketch-redraw))
 
 (transient-define-suffix sketch-text-interactively (event)
   (interactive "@e")
@@ -890,25 +891,25 @@ else return nil"
          (grid-param (plist-get (cdr (posn-image start)) :grid-param))
          (snap (transient-arg-value "--snap-to-grid=" sketch-args))
          (coords (if (or (not snap) (string= snap "nil"))
-                           (posn-object-x-y start)
-                         (sketch--snap-to-grid (posn-object-x-y start) grid-param)))
+                     (posn-object-x-y start)
+                   (sketch--snap-to-grid (posn-object-x-y start) grid-param)))
          (text (read-string "Enter text: "))
          (object-props (list :font-size
                              (transient-arg-value "--font-size=" sketch-args)
                              :font-weight
                              (transient-arg-value "--font-weight=" sketch-args)
                              )))
-                             ;; :fill
-                             ;; (transient-arg-value "--fill-color=" sketch-args)
-                             ;; :marker-end (if sketch-args (pcase (transient-arg-value "--marker=" sketch-args)
-                             ;;                        ("arrow" "url(#arrow)")
-                             ;;                        ("dot" "url(#dot)")
-                             ;;                        (_ "none"))
-                             ;;               (if sketch-include-end-marker
-                             ;;                   "url(#arrow)"
-                             ;;                 "none"))))
+    ;; :fill
+    ;; (transient-arg-value "--fill-color=" sketch-args)
+    ;; :marker-end (if sketch-args (pcase (transient-arg-value "--marker=" sketch-args)
+    ;;                        ("arrow" "url(#arrow)")
+    ;;                        ("dot" "url(#dot)")
+    ;;                        (_ "none"))
+    ;;               (if sketch-include-end-marker
+    ;;                   "url(#arrow)"
+    ;;                 "none"))))
     (apply #'svg-text (nth active-layer sketch-layers-list) text :x (car coords) :y (cdr coords) :id (sketch-create-label "text") object-props))
-    (sketch-redraw))
+  (sketch-redraw))
 
 (transient-define-infix sketch-select-font ()
   :description "Option with list"
@@ -957,19 +958,19 @@ else return nil"
 ;;     (format "%s" (if value
 ;;                      (oref obj value)
 ;;                    (oref obj default)))))
-  ;; (let ((value (oref obj value))
-  ;;       (default  (oref obj default)))
-  ;;   (if value
-  ;;       (format "%s (%s)"
-  ;;               (propertize value 'face (cons 'foreground-color value))
-  ;;               (propertize (apply 'color-rgb-to-hex (color-name-to-rgb value))
-  ;;                           'face 'transient-inactive-argument))
-  ;;     (if (string= default "none")
-  ;;         (propertize "none" 'face 'transient-inactive-argument)
-  ;;       (format "%s (%s)"
-  ;;               (propertize default 'face (cons 'foreground-color default))
-  ;;               (propertize (apply 'color-rgb-to-hex (color-name-to-rgb default))
-  ;;                           'face 'transient-inactive-argument))))))
+;; (let ((value (oref obj value))
+;;       (default  (oref obj default)))
+;;   (if value
+;;       (format "%s (%s)"
+;;               (propertize value 'face (cons 'foreground-color value))
+;;               (propertize (apply 'color-rgb-to-hex (color-name-to-rgb value))
+;;                           'face 'transient-inactive-argument))
+;;     (if (string= default "none")
+;;         (propertize "none" 'face 'transient-inactive-argument)
+;;       (format "%s (%s)"
+;;               (propertize default 'face (cons 'foreground-color default))
+;;               (propertize (apply 'color-rgb-to-hex (color-name-to-rgb default))
+;;                           'face 'transient-inactive-argument))))))
 
 (transient-define-suffix sketch-add-layer ()
   (interactive)
@@ -980,10 +981,8 @@ else return nil"
                                      (list (sketch-group (format "layer-%s" new-layer)))))
     (setq active-layer new-layer)
     (setq show-layers (append show-layers (list new-layer)))
-    (print (transient-infix-set active-layer-infix new-layer))
-    (propertize (prin1-to-string (oref active-layer-infix value))
-                'face 'transient-value)
-    (print (transient-infix-set show-layers-infix show-layers)))
+    (transient-infix-set active-layer-infix new-layer)
+    (transient-infix-set show-layers-infix show-layers))
   (transient--redisplay)
   (message "Existing layers (indices): %s" (mapconcat #'number-to-string
                                                       (number-sequence 0 (1- (length sketch-layers-list)))
@@ -996,9 +995,9 @@ that should be added to the image. Initial value: (0)"
   :description "Show layers"
   :class 'transient-lisp-variable
   :variable 'show-layers)
-  ;; :argument "--layers="
-  ;; :default '(0))
-  ;; :default (number-sequence (length sketch-layers-list)))
+;; :argument "--layers="
+;; :default '(0))
+;; :default (number-sequence (length sketch-layers-list)))
 
 (transient-define-suffix sketch-crop (event)
   (interactive "@e")
@@ -1051,8 +1050,8 @@ PROPS is passed on to `create-image' as its PROPS list."
                             (split-string value))))
     (mapcar (lambda (x)
               (cons (intern (car x)) (mapcar (lambda (val)
-                                      (string-to-number val))
-                                    (cdr x))))
+                                               (string-to-number val))
+                                             (cdr x))))
             transforms)))
 
 (defun sketch-format-transfrom-value (value)
@@ -1067,11 +1066,11 @@ PROPS is passed on to `create-image' as its PROPS list."
 
 (defun sketch-group-translate (buffer object-def direction &optional fast)
   (let ((transform (sketch-parse-transform-value
-                (dom-attr object-def
-                          'transform)))
+                    (dom-attr object-def
+                              'transform)))
         (amount (if fast
-                  10
-                1)))
+                    10
+                  1)))
     (pcase direction
       ('up (cl-decf (cadr (alist-get 'translate transform)) amount))
       ('down (cl-incf (cadr (alist-get 'translate transform)) amount)))
@@ -1134,13 +1133,13 @@ PROPS is passed on to `create-image' as its PROPS list."
          (props (cadar object-def)))
     (if (eq (caar object-def) 'g)
         (sketch-group-translate buffer (car object-def) 'down)
-    (sketch-translate-object buffer
-                             object-def
-                             props
-                             (pcase (caar object-def)
-                               ('line '(y1 y2))
-                               ('text '(y)))
-                             1))))
+      (sketch-translate-object buffer
+                               object-def
+                               props
+                               (pcase (caar object-def)
+                                 ('line '(y1 y2))
+                                 ('text '(y)))
+                               1))))
 
 (transient-define-suffix sketch-translate-fast-down (args)
   (interactive (list (oref transient-current-prefix value)))
@@ -1150,13 +1149,13 @@ PROPS is passed on to `create-image' as its PROPS list."
          (props (cadar object-def)))
     (if (eq (caar object-def) 'g)
         (sketch-group-translate buffer (car object-def) 'down t)
-    (sketch-translate-object buffer
-                             object-def
-                             props
-                             (pcase (caar object-def)
-                               ('line '(y1 y2))
-                               ('text '(y)))
-                             10))))
+      (sketch-translate-object buffer
+                               object-def
+                               props
+                               (pcase (caar object-def)
+                                 ('line '(y1 y2))
+                                 ('text '(y)))
+                               10))))
 
 (transient-define-suffix sketch-translate-up (args)
   (interactive (list (oref transient-current-prefix value)))
@@ -1166,13 +1165,13 @@ PROPS is passed on to `create-image' as its PROPS list."
          (props (cadar object-def)))
     (if (eq (caar object-def) 'g)
         (sketch-group-translate buffer (car object-def) 'up)
-    (sketch-translate-object buffer
-                             object-def
-                             props
-                             (pcase (caar object-def)
-                               ('line '(y1 y2))
-                               ('text '(y)))
-                             -1))))
+      (sketch-translate-object buffer
+                               object-def
+                               props
+                               (pcase (caar object-def)
+                                 ('line '(y1 y2))
+                                 ('text '(y)))
+                               -1))))
 
 (transient-define-suffix sketch-translate-fast-up (args)
   (interactive (list (oref transient-current-prefix value)))
@@ -1182,13 +1181,13 @@ PROPS is passed on to `create-image' as its PROPS list."
          (props (cadar object-def)))
     (if (eq (caar object-def) 'g)
         (sketch-group-translate buffer (car object-def) 'up t)
-    (sketch-translate-object buffer
-                             object-def
-                             props
-                             (pcase (caar object-def)
-                               ('line '(y1 y2))
-                               ('text '(y)))
-                             -10))))
+      (sketch-translate-object buffer
+                               object-def
+                               props
+                               (pcase (caar object-def)
+                                 ('line '(y1 y2))
+                                 ('text '(y)))
+                               -10))))
 
 (transient-define-prefix sketch-modify-object (&optional group)
   "Set object properties."
@@ -1196,7 +1195,7 @@ PROPS is passed on to `create-image' as its PROPS list."
   ["Properties"
    [("o" "object" sketch-modify-object 'transient--do-exit)]]
   [[("<down>" "down" sketch-translate-down)
-   ("<up>" "up" sketch-translate-up)]
+    ("<up>" "up" sketch-translate-up)]
    [("S-<down>" "fast down" sketch-translate-fast-down)
     ("S-<up>" "fast up" sketch-translate-fast-up)]
    [("u" "scale up" sketch-group-scale-up)
@@ -1214,17 +1213,17 @@ PROPS is passed on to `create-image' as its PROPS list."
     (with-current-buffer buffer
       (emacs-lisp-mode))
     (transient-setup 'sketch-modify-object
-                      nil
-                      nil
-                      :value (list (format "--object=%s" object)
-                                   (format "--buffer=%s" buffer)))))
+                     nil
+                     nil
+                     :value (list (format "--object=%s" object)
+                                  (format "--buffer=%s" buffer)))))
 
 (defun sketch-update-lisp-window (lisp buffer)
   ;; (let ((sketch sketch-root))
-    (with-current-buffer buffer
-      (erase-buffer)
-      (pp lisp (current-buffer))
-      (goto-char (point-max))))
+  (with-current-buffer buffer
+    (erase-buffer)
+    (pp lisp (current-buffer))
+    (goto-char (point-max))))
 
 ;;; import/snippets
 
