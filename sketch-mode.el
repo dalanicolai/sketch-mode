@@ -305,6 +305,10 @@ Optionally set a custom GRID-PARAMETER (default is value of
 With prefix ARG, create sketch using default (customizable)
 values"
   (interactive "P")
+  (let ((current-max-echo-area-height max-mini-window-height))
+    (setq max-mini-window-height 2)
+    (add-hook 'kill-buffer-hook
+              (lambda () (setq max-mini-window-height current-max-echo-area-height))))
   (let ((buffer (get-buffer "*sketch*")))
     (if buffer
         (progn (switch-to-buffer buffer)
@@ -312,6 +316,7 @@ values"
       (let ((width (if arg (car sketch-default-image-size) (read-number "Enter width: ") ))
             (height (if arg 600 (read-number "Enter height: "))))
         (switch-to-buffer (get-buffer-create "*sketch*"))
+        ;; (setq-local max-mini-window-height 2)
         (setq grid-param (if arg 25 (read-number "Enter grid parameter (enter 0 for no grid): ")))
         (sketch--create-canvas width height grid-param))
       (sketch-mode)
@@ -764,7 +769,9 @@ else return nil"
                                                (car start-coords) (cdr start-coords)
                                                (sketch--circle-radius start-coords end-coords)))
                                ("ellipse" `(svg-ellipse ,@(sketch--ellipse-coords start-coords end-coords))))))
-    (apply (car command-and-coords) (nth active-layer sketch-layers-list) `(,@(cdr command-and-coords) ,@object-props :id ,(sketch-create-label object-type)))
+    (apply (car command-and-coords)
+           (nth active-layer sketch-layers-list)
+           `(,@(cdr command-and-coords) ,@object-props :id ,(sketch-create-label object-type)))
     (when-let (buf (get-buffer "*sketch-root*"))
       (sketch-update-lisp-window sketch-root buf))
     (sketch-redraw)))
