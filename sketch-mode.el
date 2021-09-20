@@ -665,17 +665,17 @@ else return nil"
 ;;   (dolist (coord args node)
 ;;     (cl-decf (alist-get coord (cadr node)) amount)))
 
-(defun sketch--svg-translate (dx dy)
+(defun sketch--svg-translate (dx dy &optional object-def)
   (interactive)
   (let ((transform (sketch-parse-transform-value
-                    (dom-attr sketch-root
+                    (dom-attr object-def
                               'transform))))
     (cl-decf (first (alist-get 'translate transform)) dx)
     (cl-decf (second (alist-get 'translate transform)) dy)
-    (dom-set-attribute sketch-root
+    (dom-set-attribute object-def
                        'transform
-                       (sketch-format-transfrom-value transform)))
-  (sketch-redraw))
+                       (sketch-format-transfrom-value transform))))
+
   ;; (mapcar (lambda (node)
   ;;           (pcase (dom-tag node)
   ;;             ('line (sketch-translate-node-coords node dx 'x1 'x2)
@@ -1031,7 +1031,7 @@ that should be added to the image. Initial value: (0)"
     (setq svg-canvas (svg-create new-width new-height :stroke "gray"))
     (svg-marker svg-canvas "arrow" 8 8 "black" t)
     (svg-rectangle svg-canvas 0 0 new-width new-height :fill "white")
-    (setq sketch-root (sketch--svg-translate (car start-coords) (cdr start-coords)))
+    (sketch--svg-translate (car start-coords) (cdr start-coords) sketch-root)
     (sketch-redraw)))
 
 (defun sketch-image (svg &rest props)
