@@ -480,7 +480,9 @@ else return nil"
    [("D" "Show definition" sketch-show-definition)
     ("K" "Copy definition" sketch-copy-definition)
     ("S" "Save image" sketch-save)]
-   [("q" "Quit transient"           transient-quit-one)]])
+   [("b" "Insert image to buffer" sketch-insert-image-to-buffer
+     :transient transient--do-exit)
+    ("q" "Quit transient" transient-quit-one)]])
 
 (transient-define-infix sketch-object ()
   :description "Option with list"
@@ -1034,7 +1036,33 @@ PROPS is passed on to `create-image' as its PROPS list."
 
 (transient-define-suffix sketch-save ()
   (interactive)
-  (image-save))
+  (let ((image (get-char-property (point) 'display))
+        (file (read-file-name "Save as: ")))
+    (with-temp-file file
+      (insert (plist-get (cdr image) :data)))))
+
+(transient-define-suffix sketch-insert-image-to-buffer (&optional insert-at-end-of-file)
+  "Insert image to buffer at point.
+When prefixed with a universal argument \\[universal-argument]
+then insert at end of file.
+
+Prompts for buffer for insert, then for the image file name for
+save. If the image is saved in a sub-directory of the buffer file
+then insert a relative link, otherwise insert an absolute link."
+  (interactive "P")
+  (let* ((buffer (get-buffer (read-buffer "Add to buffer: ")))
+         (buffer-dir (file-name-directory (buffer-file-name buffer)))
+         (image (get-char-property (point) 'display))
+         (file (read-file-name "Save as: " buffer-dir)))
+    (kill-buffer "*sketch*")
+    (with-temp-file file
+      (insert (plist-get (cdr image) :data)))
+    (switch-to-buffer buffer)
+    (when insert-at-end-of-file
+      (goto-char (point-max)))
+    (insert (format "[[%s]]" (if (string-match buffer-dir file)
+                                 (concat "./" (file-name-nondirectory file))
+                               file)))))
 
 
 ;;; Modify object
