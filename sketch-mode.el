@@ -75,7 +75,7 @@
 ;;; Code:
 (require 'svg)
 (require 'transient)
-(require 'seq)
+(require 'cl-lib)
 
 (defgroup sketch nil
   "Configure default sketch (object) properties."
@@ -658,24 +658,33 @@ else return nil"
 ;; (with-current-buffer (get-buffer "*sketch*")
 ;;   (mapcar (lambda (layer) (alist-get 'id (cadr layer))) sketch-layers-list)))
 
-(defun sketch-translate-node-coords (node amount &rest args)
-  (dolist (coord args node)
-    (cl-decf (alist-get coord (cadr node)) amount)))
+;; (defun sketch-translate-node-coords (node amount &rest args)
+;;   (dolist (coord args node)
+;;     (cl-decf (alist-get coord (cadr node)) amount)))
 
 (defun sketch--svg-translate (dx dy)
   (interactive)
-  (mapcar (lambda (node)
-            (pcase (dom-tag node)
-              ('line (sketch-translate-node-coords node dx 'x1 'x2)
-                     (sketch-translate-node-coords node dy 'y1 'y2))
-              ('rect (sketch-translate-node-coords node dx 'x)
-                     (sketch-translate-node-coords node dy 'y))
-              ((or 'circle 'ellipse)
-               (sketch-translate-node-coords node dx 'cx)
-               (sketch-translate-node-coords node dy 'cy))
-              ('text (sketch-translate-node-coords node dx 'x)
-                     (sketch-translate-node-coords node dy 'y))))
-          (cddr (nth active-layer sketch-layers-list))))
+  (let ((transform (sketch-parse-transform-value
+                    (dom-attr sketch-root
+                              'transform))))
+    (cl-decf (first (alist-get 'translate transform)) dx)
+    (cl-decf (second (alist-get 'translate transform)) dy)
+    (dom-set-attribute sketch-root
+                       'transform
+                       (sketch-format-transfrom-value transform)))
+  (sketch-redraw))
+  ;; (mapcar (lambda (node)
+  ;;           (pcase (dom-tag node)
+  ;;             ('line (sketch-translate-node-coords node dx 'x1 'x2)
+  ;;                    (sketch-translate-node-coords node dy 'y1 'y2))
+  ;;             ('rect (sketch-translate-node-coords node dx 'x)
+  ;;                    (sketch-translate-node-coords node dy 'y))
+  ;;             ((or 'circle 'ellipse)
+  ;;              (sketch-translate-node-coords node dx 'cx)
+  ;;              (sketch-translate-node-coords node dy 'cy))
+  ;;             ('text (sketch-translate-node-coords node dx 'x)
+  ;;                    (sketch-translate-node-coords node dy 'y))))
+  ;;         (cddr (nth active-layer sketch-layers-list))))
 ;; (let ((node (car (dom-by-id svg-sketch label))))
 ;;   (pcase (car node)
 ;;     ('g (setf (alist-get 'transform (cadr node))
@@ -705,7 +714,7 @@ else return nil"
     ;;     (if-let (buf (get-buffer"*sketch-root*"))
     ;;         (sketch-update-lisp-window sketch-root buf)
     ;;       (sketch-update-lisp-window lisp lisp-buffer))))
-    (setq sketch-root (append (seq-subseq sketch-root 0 2) (list (nth (car show-layers) sketch-layers-list))))
+    (setq sketch-root (append (cl-subseq sketch-root 0 2) (list (nth (car show-layers) sketch-layers-list))))
     (dolist (layer (cdr show-layers))
       (setq sketch-root (append sketch-root (list (nth layer sketch-layers-list)))))
     (setq sketch-svg (append svg-canvas
@@ -1100,8 +1109,8 @@ then insert a relative link, otherwise insert an absolute link."
                     10
                   1)))
     (pcase direction
-      ('up (cl-decf (cadr (alist-get 'translate transform)) amount))
-      ('down (cl-incf (cadr (alist-get 'translate transform)) amount)))
+      ('up (cl-decf (second (alist-get 'translate transform)) amount))
+      ('down (cl-incf (second (alist-get 'translate transform)) amount)))
     (dom-set-attribute object-def
                        'transform
                        (sketch-format-transfrom-value transform))
@@ -1298,7 +1307,7 @@ then insert a relative link, otherwise insert an absolute link."
   ;;     (if-let (buf (get-buffer"*sketch-root*"))
   ;;         (sketch-update-lisp-window sketch-root buf)
   ;;       (sketch-update-lisp-window lisp lisp-buffer))))
-  ;; (setq sketch-root (append (seq-subseq sketch-root 0 2) (list (nth (car show-layers) svg-layers))))
+  ;; (setq sketch-root (append (cl-subseq sketch-root 0 2) (list (nth (car show-layers) svg-layers))))
   ;; (dolist (layer (cdr show-layers))
   ;;   (setq sketch-root (append sketch-root (list (nth layer svg-layers)))))
   ;; (setq sketch-svg (append svg-canvas
