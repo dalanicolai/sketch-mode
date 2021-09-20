@@ -20,6 +20,7 @@
    - snap to grid
    - draw text
    - crop finale image
+   - quickly insert image + definition into (org-mode) buffer
    - set stroke, fill, width etc.
    - show dom (lisp) in other window
    - draw angle arcs (between lines, available soon, I hope. See
@@ -94,6 +95,8 @@
   package, the usage is more or less self explanatory, it is wise to take note
   of the following comments:
 
+  - use =I= to quickly insert the xml-definition into the (org-mode) buffer from
+    which sketch-mode was called and create the image as an overlay.
   - to remove an object (without using undo), you should toggle labels by
     pressing =l=, and then to remove an object enter its label after pressing
     =R=.
