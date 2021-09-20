@@ -305,8 +305,8 @@ Optionally set a custom GRID-PARAMETER (default is value of
 With prefix ARG, create sketch using default (customizable)
 values"
   (interactive "P")
-  ;; (setq max-mini-window-height 2)
-  (let ((buffer (get-buffer "*sketch*")))
+  (let ((call-buffer (current-buffer))
+        (buffer (get-buffer "*sketch*")))
     (if buffer
         (progn (switch-to-buffer buffer)
                (call-interactively 'sketch-transient))
@@ -315,6 +315,7 @@ values"
         (switch-to-buffer (get-buffer-create "*sketch*"))
         (setq grid-param (if arg 25 (read-number "Enter grid parameter (enter 0 for no grid): ")))
         (sketch--create-canvas width height grid-param))
+      (setq-local call-buffer call-buffer)
       (sketch-mode)
       (call-interactively 'sketch-transient))))
 
@@ -481,6 +482,8 @@ else return nil"
     ("K" "Copy definition" sketch-copy-definition)
     ("S" "Save image" sketch-save)]
    [("b" "Insert image to buffer" sketch-insert-image-to-buffer
+     :transient transient--do-exit)
+    ("I" "Insert image to buffer" sketch-quick-insert-image
      :transient transient--do-exit)
     ("q" "Quit transient" transient-quit-one)]])
 
@@ -1073,6 +1076,16 @@ then insert a relative link, otherwise insert an absolute link."
                                  (concat "./" (file-name-nondirectory file))
                                file)))))
 
+(transient-define-suffix sketch-quick-insert-image (&optional insert-at-end-of-file)
+  (interactive "P")
+  (let ((insert-buffer call-buffer))
+    (kill-buffer "*sketch*")
+    (switch-to-buffer insert-buffer)
+    (when insert-at-end-of-file
+      (goto-char (point-max))
+      (unless (= (current-column) 0)
+        (newline)))
+    (insert-image (svg-image sketch-svg))))
 
 ;;; Modify object
 
