@@ -248,7 +248,7 @@ VEC should be a cons or a list containing only number elements."
         (abs (/ (- (car end-coords) (car start-coords)) 2))
         (abs (/ (- (cdr end-coords) (cdr start-coords)) 2))))
 
-(defvar sketch-svg)
+(defvar-local sketch-svg nil)
 (defvar-local svg-canvas nil)
 (defvar-local sketch-grid nil)
 (defvar-local sketch-root nil)
@@ -298,6 +298,7 @@ Optionally set a custom GRID-PARAMETER (default is value of
 (defvar-local sketch-elements nil)
 (defvar-local grid-param 25)
 (defvar-local active-layer 0)
+(defvar-local call-buffer nil)
 
 ;;;###autoload
 (defun sketch (arg)
@@ -315,7 +316,7 @@ values"
         (switch-to-buffer (get-buffer-create "*sketch*"))
         (setq grid-param (if arg 25 (read-number "Enter grid parameter (enter 0 for no grid): ")))
         (sketch--create-canvas width height grid-param))
-      (setq-local call-buffer call-buffer)
+      (setq call-buffer call-buffer)
       (sketch-mode)
       (call-interactively 'sketch-transient))))
 
@@ -1077,15 +1078,29 @@ then insert a relative link, otherwise insert an absolute link."
                                file)))))
 
 (transient-define-suffix sketch-quick-insert-image (&optional insert-at-end-of-file)
+  "Insert image at point as overlay wrapped in org image block.
+The image overlay is created over the inserted xml
+definition and is wrapped inside an image block (not yet
+supported by org-mode). When INSERT-AT-END-OF-FILE is non-nil
+then insert the image at the end"
   (interactive "P")
-  (let ((insert-buffer call-buffer))
+  (let ((insert-buffer call-buffer)
+        (image-def sketch-svg))
     (kill-buffer "*sketch*")
     (switch-to-buffer insert-buffer)
     (when insert-at-end-of-file
       (goto-char (point-max))
       (unless (= (current-column) 0)
         (newline)))
-    (insert-image (svg-image sketch-svg))))
+    (insert "#+BEGIN_IMAGE\n")
+    (let* ((image (svg-image image-def))
+           (data (image-property image :data)))
+      (insert-image image (with-temp-buffer
+                            (insert data)
+                            (let ((bounds (bounds-of-thing-at-point 'line)))
+                              (sgml-pretty-print (car bounds) (cdr bounds)))
+                            (buffer-string)))
+      (insert "\n#+END_IMAGE"))))
 
 ;;; Modify object
 
