@@ -254,6 +254,7 @@ VEC should be a cons or a list containing only number elements."
 (defvar-local sketch-root nil)
 (defvar-local sketch-layers-list nil)
 (defvar-local show-layers nil)
+(defvar-local sketch-cursor-position nil)
 
 (defun sketch--create-canvas (width height &optional grid-parameter)
   "Create canvas of size WIDTH x HEIGHT for drawing svg.
@@ -288,9 +289,10 @@ Optionally set a custom GRID-PARAMETER (default is value of
                                         (pointer arrow help-echo (lambda (_ _ pos)
                                                                    (let ((message-log-max nil)
                                                                          (coords (cdr (mouse-pixel-position))))
-                                                                     (print (format "(%s, %s)"
-                                                                                    (- (car coords) sketch-im-x-offset)
-                                                                                    (+ (cdr coords) sketch-im-y-offset)))))))))
+                                                                     (setq sketch-cursor-position (format "(%s, %s)"
+                                                                                                          (- (car coords) sketch-im-x-offset)
+                                                                                                          (+ (cdr coords) sketch-im-y-offset))))
+								                                                   (force-mode-line-update))))))
                   (prin1-to-string sketch-root))))
 
 ;; FIXME: `defvar' can't be meaningfully inside a function like that.
@@ -314,6 +316,7 @@ values"
       (let ((width (if arg (car sketch-default-image-size) (read-number "Enter width: ") ))
             (height (if arg 600 (read-number "Enter height: "))))
         (switch-to-buffer (get-buffer-create "*sketch*"))
+        (add-to-list 'mode-line-format '(:eval sketch-cursor-position) t)
         (setq grid-param (if arg 25 (read-number "Enter grid parameter (enter 0 for no grid): ")))
         (sketch--create-canvas width height grid-param))
       (setq call-buffer call-buffer)
@@ -677,18 +680,18 @@ else return nil"
                        'transform
                        (sketch-format-transfrom-value transform))))
 
-  ;; (mapcar (lambda (node)
-  ;;           (pcase (dom-tag node)
-  ;;             ('line (sketch-translate-node-coords node dx 'x1 'x2)
-  ;;                    (sketch-translate-node-coords node dy 'y1 'y2))
-  ;;             ('rect (sketch-translate-node-coords node dx 'x)
-  ;;                    (sketch-translate-node-coords node dy 'y))
-  ;;             ((or 'circle 'ellipse)
-  ;;              (sketch-translate-node-coords node dx 'cx)
-  ;;              (sketch-translate-node-coords node dy 'cy))
-  ;;             ('text (sketch-translate-node-coords node dx 'x)
-  ;;                    (sketch-translate-node-coords node dy 'y))))
-  ;;         (cddr (nth active-layer sketch-layers-list))))
+;; (mapcar (lambda (node)
+;;           (pcase (dom-tag node)
+;;             ('line (sketch-translate-node-coords node dx 'x1 'x2)
+;;                    (sketch-translate-node-coords node dy 'y1 'y2))
+;;             ('rect (sketch-translate-node-coords node dx 'x)
+;;                    (sketch-translate-node-coords node dy 'y))
+;;             ((or 'circle 'ellipse)
+;;              (sketch-translate-node-coords node dx 'cx)
+;;              (sketch-translate-node-coords node dy 'cy))
+;;             ('text (sketch-translate-node-coords node dx 'x)
+;;                    (sketch-translate-node-coords node dy 'y))))
+;;         (cddr (nth active-layer sketch-layers-list))))
 ;; (let ((node (car (dom-by-id svg-sketch label))))
 ;;   (pcase (car node)
 ;;     ('g (setf (alist-get 'transform (cadr node))
@@ -735,9 +738,10 @@ else return nil"
                                         (pointer arrow help-echo (lambda (_ _ pos)
                                                                    (let ((message-log-max nil)
                                                                          (coords (mouse-pixel-position)))
-                                                                     (print (format "(%s, %s)"
-                                                                                    (- (cadr coords) pos)
-                                                                                    (cddr coords)))))))))
+                                                                     (setq sketch-cursor-position (format "(%s, %s)"
+                                                                                                          (- (cadr coords) pos)
+                                                                                                          (cddr coords))))
+								                                                   (force-mode-line-update))))))
                   (prin1-to-string sketch-root))))
 
 
