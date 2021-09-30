@@ -76,6 +76,7 @@
 (require 'svg)
 (require 'transient)
 (require 'cl-lib)
+(require 'sgml-mode)
 
 (defgroup sketch nil
   "Configure default sketch (object) properties."
