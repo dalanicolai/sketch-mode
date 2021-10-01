@@ -675,8 +675,8 @@ else return nil"
   (let ((transform (sketch-parse-transform-value
                     (dom-attr object-def
                               'transform))))
-    (cl-decf (first (alist-get 'translate transform)) dx)
-    (cl-decf (second (alist-get 'translate transform)) dy)
+    (cl-decf (cl-first (alist-get 'translate transform)) dx)
+    (cl-decf (cl-second (alist-get 'translate transform)) dy)
     (dom-set-attribute object-def
                        'transform
                        (sketch-format-transfrom-value transform))))
