@@ -299,9 +299,9 @@ Optionally set a custom GRID-PARAMETER (default is value of
 ;; FIXME: `defvar' can't be meaningfully inside a function like that.
 ;; FIXME: Use a `sketch-' prefix for all dynbound vars.
 (defvar-local sketch-elements nil)
-(defvar-local grid-param 25)
-(defvar-local active-layer 0)
-(defvar-local call-buffer nil)
+(defvar-local sketch-grid-param 25)
+(defvar-local sketch-active-layer 0)
+(defvar-local sketch-call-buffer nil)
 
 ;;;###autoload
 (defun sketch (arg)
@@ -309,7 +309,7 @@ Optionally set a custom GRID-PARAMETER (default is value of
 With prefix ARG, create sketch using default (customizable)
 values"
   (interactive "P")
-  (let ((call-buffer (current-buffer))
+  (let ((call-buffer (current-buffer)) ;; to set value as local variable later in '*sketch*' buffer
         (buffer (get-buffer "*sketch*")))
     (if buffer
         (progn (switch-to-buffer buffer)
@@ -318,9 +318,9 @@ values"
             (height (if arg 600 (read-number "Enter height: "))))
         (switch-to-buffer (get-buffer-create "*sketch*"))
         (add-to-list 'mode-line-format '(:eval sketch-cursor-position) t)
-        (setq grid-param (if arg 25 (read-number "Enter grid parameter (enter 0 for no grid): ")))
-        (sketch--create-canvas width height grid-param))
-      (setq call-buffer call-buffer)
+        (setq sketch-grid-param (if arg 25 (read-number "Enter grid parameter (enter 0 for no grid): ")))
+        (sketch--create-canvas width height sketch-grid-param))
+      (setq sketch-call-buffer call-buffer) ;; variable is buffer local
       (sketch-mode)
       (call-interactively 'sketch-transient))))
 
@@ -416,15 +416,15 @@ else return nil"
 ;; (let* ((args (when transient-current-prefix (transient-args 'sketch-transient)))
 ;;        (print event))))
 ;;      (start (event-start event))
-;;      (grid-param (plist-get (cdr (posn-image start)) :grid-param))
+;;      (sketch-grid-param (plist-get (cdr (posn-image start)) :grid-param))
 ;;      (snap (transient-arg-value "--snap-to-grid=" args))
 ;;      (start-coords (if (or (not snap) (string= snap "nil"))
 ;;                       (posn-object-x-y start)
-;;                     (sketch--snap-to-grid (posn-object-x-y start) grid-param)))
+;;                     (sketch--snap-to-grid (posn-object-x-y start) sketch-grid-param)))
 ;;      (end (event-end event))
 ;;      (end-coords (if (or (not snap) (string= snap "nil"))
 ;;                     (posn-object-x-y end)
-;;                   (sketch--snap-to-grid (posn-object-x-y end) grid-param)))
+;;                   (sketch--snap-to-grid (posn-object-x-y end) sketch-grid-param)))
 ;;      (object-props (list :stroke-width
 ;;                          (transient-arg-value "--stroke-width=" args)
 ;;                          :stroke
@@ -568,7 +568,7 @@ else return nil"
 (defun sketch-labels ()
   (interactive)
   (let ((nodes (pcase sketch-show-labels
-                 ("layer" (dom-children (nth active-layer sketch-layers-list)))
+                 ("layer" (dom-children (nth sketch-active-layer sketch-layers-list)))
                  ("all" (apply #'append (mapcar (lambda (l)
                                                   (dom-children (nth l sketch-layers-list)))
                                                 show-layers)))))
@@ -638,8 +638,8 @@ else return nil"
 
 (defun sketch-create-label (type)
   (interactive)
-  (let* ((prefix (concat (when (/= active-layer 0)
-                           (number-to-string active-layer))
+  (let* ((prefix (concat (when (/= sketch-active-layer 0)
+                           (number-to-string sketch-active-layer))
                          (pcase type
                            ("line" "l")
                            ("rectangle" "r")
@@ -659,7 +659,7 @@ else return nil"
   "Layer that is currently active when sketching."
   :description "Active layer"
   :class 'transient-lisp-variable
-  :variable 'active-layer)
+  :variable 'sketch-active-layer)
 
 (defun sketch-list-layers ()
   (mapcar #'number-to-string (number-sequence 0 (length sketch-layers-list))))
@@ -692,7 +692,7 @@ else return nil"
 ;;              (sketch-translate-node-coords node dy 'cy))
 ;;             ('text (sketch-translate-node-coords node dx 'x)
 ;;                    (sketch-translate-node-coords node dy 'y))))
-;;         (cddr (nth active-layer sketch-layers-list))))
+;;         (cddr (nth sketch-active-layer sketch-layers-list))))
 ;; (let ((node (car (dom-by-id svg-sketch label))))
 ;;   (pcase (car node)
 ;;     ('g (setf (alist-get 'transform (cadr node))
@@ -732,7 +732,7 @@ else return nil"
     (erase-buffer) ;; a (not exact) alternative is to use (kill-backward-chars 1)
     (insert-image (sketch-image sketch-svg
                                 :pointer 'arrow
-                                :grid-param grid-param
+                                :grid-param sketch-grid-param
                                 :map `(((rect . ((0 . 0) . (,(dom-attr sketch-svg 'width) . ,(dom-attr sketch-svg 'height))))
                                         ;; :map '(((rect . ((0 . 0) . (800 . 600)))
                                         sketch
@@ -785,7 +785,7 @@ else return nil"
                                                (car start-coords) (cdr start-coords)
                                                (sketch--circle-radius start-coords end-coords)))
                                ("ellipse" `(svg-ellipse ,@(sketch--ellipse-coords start-coords end-coords))))))
-    (apply (car command-and-coords) (nth active-layer sketch-layers-list) `(,@(cdr command-and-coords) ,@object-props :id ,(sketch-create-label object-type)))
+    (apply (car command-and-coords) (nth sketch-active-layer sketch-layers-list) `(,@(cdr command-and-coords) ,@object-props :id ,(sketch-create-label object-type)))
     (when-let (buf (get-buffer "*sketch-root*"))
       (sketch-update-lisp-window sketch-root buf))
     (sketch-redraw)))
@@ -807,7 +807,7 @@ else return nil"
     (dom-set-attribute node
                        'id
                        label)
-    (dom-append-child (nth active-layer sketch-layers-list) node)
+    (dom-append-child (nth sketch-active-layer sketch-layers-list) node)
     (sketch-redraw)
     (sketch-modify-object label)))
 
@@ -928,7 +928,7 @@ else return nil"
     ;;               (if sketch-include-end-marker
     ;;                   "url(#arrow)"
     ;;                 "none"))))
-    (apply #'svg-text (nth active-layer sketch-layers-list) text :x (car coords) :y (cdr coords) :id (sketch-create-label "text") object-props))
+    (apply #'svg-text (nth sketch-active-layer sketch-layers-list) text :x (car coords) :y (cdr coords) :id (sketch-create-label "text") object-props))
   (sketch-redraw))
 
 (transient-define-infix sketch-select-font ()
@@ -999,7 +999,7 @@ else return nil"
         (show-layers-infix (object-assoc "Show layers" 'description transient-current-suffixes)))
     (setq sketch-layers-list (append sketch-layers-list
                                      (list (sketch-group (format "layer-%s" new-layer)))))
-    (setq active-layer new-layer)
+    (setq sketch-active-layer new-layer)
     (setq show-layers (append show-layers (list new-layer)))
     (transient-infix-set active-layer-infix new-layer)
     (transient-infix-set show-layers-infix show-layers))
@@ -1089,7 +1089,7 @@ definition and is wrapped inside an image block (not yet
 supported by org-mode). When INSERT-AT-END-OF-FILE is non-nil
 then insert the image at the end"
   (interactive "P")
-  (let ((insert-buffer call-buffer)
+  (let ((insert-buffer sketch-call-buffer)
         (image-def sketch-svg))
     (kill-buffer "*sketch*")
     (switch-to-buffer insert-buffer)
