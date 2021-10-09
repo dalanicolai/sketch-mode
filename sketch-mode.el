@@ -281,20 +281,22 @@ Optionally set a custom GRID-PARAMETER (default is value of
     (setq sketch-root (sketch-group "root"))
     (setq sketch-layers-list (list (sketch-group "layer-0")))
     (setq show-layers '(0))
-    (insert-image (sketch-image sketch-svg
+    (sketch-insert-image sketch-svg
+                         (prin1-to-string sketch-root)
                                 :grid-param grid-parameter
                                 :pointer 'arrow
                                 :map `(((rect . ((0 . 0) . (,(dom-attr sketch-svg 'width) . ,(dom-attr sketch-svg 'height))))
                                         ;; :map '(((rect . ((0 . 0) . (800 . 600)))
                                         sketch
                                         (pointer arrow help-echo (lambda (_ _ pos)
-                                                                   (let ((message-log-max nil)
+                                                                   (let (
+                                                                         ;; (message-log-max nil)
                                                                          (coords (cdr (mouse-pixel-position))))
                                                                      (setq sketch-cursor-position (format "(%s, %s)"
                                                                                                           (- (car coords) sketch-im-x-offset)
                                                                                                           (+ (cdr coords) sketch-im-y-offset))))
-								                                                   (force-mode-line-update))))))
-                  (prin1-to-string sketch-root))))
+								                                                   (force-mode-line-update)))))
+                  )))
 
 ;; FIXME: `defvar' can't be meaningfully inside a function like that.
 ;; FIXME: Use a `sketch-' prefix for all dynbound vars.
@@ -475,9 +477,12 @@ else return nil"
     ("-L" sketch-layers)
     ("A" "Add layer" sketch-add-layer)]]
   ["Commands"
-   [([sketch drag-mouse-1] "Draw object"  sketch-interactively-1)
+   [([sketch down-mouse-1] "Draw object"  sketch-interactively-1)
     ([sketch mouse-1] "Draw text"  sketch-text-interactively)
-    ([sketch C-S-drag-mouse-1] "Crop image" sketch-crop)]
+    ([sketch C-S-drag-mouse-1] "Crop image" sketch-crop)
+    ;; ("T" "Polyline" test-mouse)
+    ;; ([sketch S-down-mouse-1] "Track mouse" sketch-line)
+    ]
    [("t" "Transform object" sketch-modify-object)
     ("r" "Remove object" sketch-remove-object)
     ("i" "Import object" sketch-import)]
@@ -710,7 +715,7 @@ else return nil"
 ;;     ) ;; TODO make it work for all types of elements
 ;;   node))
 
-(defun sketch-redraw (&optional lisp lisp-buffer)
+(defun sketch-redraw (&optional lisp lisp-buffer coords)
   (unless sketch-mode
     (user-error "Not in sketch-mode buffer"))
   (save-current-buffer
@@ -730,23 +735,59 @@ else return nil"
                              (when sketch-show-labels (list (sketch-labels)))
                              (list sketch-root)))
     (erase-buffer) ;; a (not exact) alternative is to use (kill-backward-chars 1)
-    (insert-image (sketch-image sketch-svg
+    (sketch-insert-image sketch-svg
+                         (prin1-to-string sketch-root)
                                 :pointer 'arrow
                                 :grid-param sketch-grid-param
                                 :map `(((rect . ((0 . 0) . (,(dom-attr sketch-svg 'width) . ,(dom-attr sketch-svg 'height))))
                                         ;; :map '(((rect . ((0 . 0) . (800 . 600)))
                                         sketch
                                         (pointer arrow help-echo (lambda (_ _ pos)
-                                                                   (let ((message-log-max nil)
-                                                                         (coords (mouse-pixel-position)))
+                                                                   ;; (let ((message-log-max nil)
+                                                                   ;;       (coords (mouse-pixel-position)))
                                                                      (setq sketch-cursor-position (format "(%s, %s)"
-                                                                                                          (- (cadr coords) pos)
-                                                                                                          (cddr coords))))
-								                                                   (force-mode-line-update))))))
-                  (prin1-to-string sketch-root))))
+                                                                                                          (- (car coords) pos)
+                                                                                                          (cdr coords)))
+								                                                   (force-mode-line-update)))))
+                  )))
 
+(defun sketch-update (&optional lisp lisp-buffer coords)
+  (unless sketch-mode
+    (user-error "Not in sketch-mode buffer"))
+  (save-current-buffer
+    (when lisp-buffer
+      (sketch-update-lisp-window lisp lisp-buffer))
+    ;; (let ((lisp-window (or (get-buffer-window "*sketch-root*")
+    ;;                        (get-buffer-window lisp-buffer))))
+    ;;   (unless (string= (buffer-name (window-buffer lisp-window)) "*sketch*")
+    ;;     (if-let (buf (get-buffer"*sketch-root*"))
+    ;;         (sketch-update-lisp-window sketch-root buf)
+    ;;       (sketch-update-lisp-window lisp lisp-buffer))))
+    (setq sketch-root (append (cl-subseq sketch-root 0 2) (list (nth (car show-layers) sketch-layers-list))))
+    (dolist (layer (cdr show-layers))
+      (setq sketch-root (append sketch-root (list (nth layer sketch-layers-list)))))
+    (setq sketch-svg (append svg-canvas
+                             (when sketch-show-grid (list sketch-grid))
+                             (when sketch-show-labels (list (sketch-labels)))
+                             (list sketch-root)))
+    (erase-buffer) ;; a (not exact) alternative is to use (kill-backward-chars 1)
+    (sketch-insert-image sketch-svg
+                         nil
+                                :pointer 'arrow
+                                :grid-param sketch-grid-param
+                                :map `(((rect . ((0 . 0) . (,(dom-attr sketch-svg 'width) . ,(dom-attr sketch-svg 'height))))
+                                        ;; :map '(((rect . ((0 . 0) . (800 . 600)))
+                                        sketch
+                                        (pointer arrow help-echo (lambda (_ _ pos)
+                                                                   ;; (let ((message-log-max nil)
+                                                                   ;;       (coords (mouse-pixel-position)))
+                                                                     (setq sketch-cursor-position (format "(%s, %s)"
+                                                                                                          (- (car coords) pos)
+                                                                                                          (cdr coords)))
+								                                                   (force-mode-line-update)))))
+                  )))
 
-(transient-define-suffix sketch-interactively-1 (event)
+(defun sketch-interactively-1 (event)
   (interactive "@e")
   (let* ((args (when transient-current-prefix (transient-args 'sketch-transient)))
          (start (event-start event))
@@ -775,20 +816,50 @@ else return nil"
                                                "url(#arrow)"
                                              "none"))))
          (object-type (transient-arg-value "--object=" args))
-         (command-and-coords (pcase object-type
+         (start-command-and-coords (pcase object-type
                                ("line" (list 'svg-line
                                              (car start-coords) (cdr start-coords)
-                                             (car end-coords) (cdr end-coords)))
+                                             (car start-coords) (cdr start-coords)))
                                ("rectangle" `(svg-rectangle
-                                              ,@(sketch--rectangle-coords start-coords end-coords)))
+                                              ,@(sketch--rectangle-coords start-coords start-coords)))
                                ("circle" (list 'svg-circle
                                                (car start-coords) (cdr start-coords)
-                                               (sketch--circle-radius start-coords end-coords)))
-                               ("ellipse" `(svg-ellipse ,@(sketch--ellipse-coords start-coords end-coords))))))
-    (apply (car command-and-coords) (nth sketch-active-layer sketch-layers-list) `(,@(cdr command-and-coords) ,@object-props :id ,(sketch-create-label object-type)))
-    (when-let (buf (get-buffer "*sketch-root*"))
-      (sketch-update-lisp-window sketch-root buf))
-    (sketch-redraw)))
+                                               (sketch--circle-radius start-coords start-coords)))
+                               ("ellipse" `(svg-ellipse ,@(sketch--ellipse-coords start-coords start-coords)))))
+         ;; (end-command-and-coords (pcase object-type
+         ;;                       ("line" (list 'svg-line
+         ;;                                     (car start-coords) (cdr start-coords)
+         ;;                                     (car end-coords) (cdr end-coords)))
+         ;;                       ("rectangle" `(svg-rectangle
+         ;;                                      ,@(sketch--rectangle-coords start-coords end-coords)))
+         ;;                       ("circle" (list 'svg-circle
+         ;;                                       (car start-coords) (cdr start-coords)
+         ;;                                       (sketch--circle-radius start-coords end-coords)))
+         ;;                       ("ellipse" `(svg-ellipse ,@(sketch--ellipse-coords start-coords end-coords)))))
+         (label (sketch-create-label object-type)))
+    (apply (car start-command-and-coords) (nth sketch-active-layer sketch-layers-list) `(,@(cdr start-command-and-coords) ,@object-props :id ,label))
+    ;; (apply (car end-command-and-coords) (nth sketch-active-layer sketch-layers-list) `(,@(cdr command-and-coords) ,@object-props :id ,label))
+    (let ((node (car (dom-by-id (nth sketch-active-layer sketch-layers-list) label))))
+      (track-mouse
+        (while (not (eq (car event) 'drag-mouse-1))
+          (setq event (read-event))
+          (let ((end (posn-object-x-y (event-start event))))
+            (setf (dom-attr node 'x2) (car end))
+            (setf (dom-attr node 'y2) (cdr end)))
+          (sketch-update nil nil (cons (car end) (cdr end)))))
+          ;; (sketch-possibly-update-image sketch-svg)))
+      (let ((end (posn-object-x-y (event-end event))))
+        (setf (dom-attr node 'x2) (car end))
+        (setf (dom-attr node 'y2) (cdr end))
+        ;; (sketch-possibly-update-image sketch-svg
+        ;;                               :pointer 'arrow
+        ;;                               :map `(((rect . ((0 . 0) . (,(dom-attr sketch-svg 'width) . ,(dom-attr sketch-svg 'height))))
+        ;;                                       ;; :map '(((rect . ((0 . 0) . (800 . 600)))
+        ;;                                       sketch
+        ;;                                       (pointer arrow))))
+        (when-let (buf (get-buffer "*sketch-root*"))
+          (sketch-update-lisp-window sketch-root buf))
+        (sketch-redraw)))))
 
 (transient-define-suffix sketch-remove-object ()
   (interactive)
@@ -881,7 +952,8 @@ else return nil"
         ((fboundp 'undo-tree-undo)
          (undo-tree-undo))
         (t (undo)))
-  (setq sketch-root (read (buffer-string)))
+  (setq sketch-svg (read (buffer-string)))
+  (setq sketch-root (car (dom-by-id sketch-svg "root")))
   (setq sketch-layers-list (dom-elements sketch-root 'id "layer"))
   (unless sketch-layers-list (sketch-add-layer)))
 ;; (let ((sketch-reverse (nreverse sketch-root)))
@@ -1051,6 +1123,29 @@ PROPS is passed on to `create-image' as its PROPS list."
      (svg-print svg)
      (buffer-string))
    'svg t props))
+
+(defun sketch-insert-image (svg string &rest props)
+  "Insert SVG as an image at point.
+If the SVG is later changed, the image will also be updated."
+  (let ((image (apply #'sketch-image svg props))
+	      (marker (point-marker)))
+    (insert-image image string)))
+    ;; (dom-set-attribute svg :image marker)))
+
+(defun sketch-possibly-update-image (svg)
+  (let ((marker (dom-attr svg :image)))
+    (when (and marker
+	             (buffer-live-p (marker-buffer marker)))
+      (with-current-buffer (marker-buffer marker)
+	      (put-text-property marker (1+ marker) 'display (svg-image svg))))))
+
+(defun sketch-possibly-update-image (svg)
+  "Exact copy of svg-possibly-update-image."
+  (let ((marker (dom-attr svg :image)))
+    (when (and marker
+	             (buffer-live-p (marker-buffer marker)))
+      (with-current-buffer (marker-buffer marker)
+	      (put-text-property marker (1+ marker) 'display (svg-image svg))))))
 
 (transient-define-suffix sketch-save ()
   (interactive)
