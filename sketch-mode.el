@@ -501,7 +501,7 @@ else return nil"
   :description "Option with list"
   :class 'sketch-variable:choices
   :argument "--object="
-  :choices '("rectangle" "circle" "ellipse")
+  :choices '("rectangle" "circle" "ellipse" "polyline" "polygon")
   :default "line")
 
 (transient-define-infix sketch-stroke-color ()
@@ -602,6 +602,17 @@ else return nil"
                                                :font-size sketch-label-size
                                                :stroke "red"
                                                :fill "red"))
+              ((or 'polyline 'polygon) (let ((coords (split-string
+                                                      (car (split-string (dom-attr node 'points) ","))
+                                                      nil
+                                                      t)))
+                                         (svg-text svg-labels
+                                                   (dom-attr node 'id)
+                                                   :x (string-to-number (car coords))
+                                                   :y (string-to-number (cadr coords))
+                                                   :font-size sketch-label-size
+                                                   :stroke "red"
+                                                   :fill "red")))
               ('text (svg-text svg-labels
                                (dom-attr node 'id)
                                :x (dom-attr node 'x)
@@ -650,6 +661,8 @@ else return nil"
                            ("rectangle" "r")
                            ("circle" "c")
                            ("ellipse" "e")
+                           ("polyline" "p")
+                           ("polygon" "g")
                            ("text" "t")
                            ("group" "g"))))
          (idx 0)
@@ -742,14 +755,16 @@ else return nil"
                                 :map `(((rect . ((0 . 0) . (,(dom-attr sketch-svg 'width) . ,(dom-attr sketch-svg 'height))))
                                         ;; :map '(((rect . ((0 . 0) . (800 . 600)))
                                         sketch
-                                        (pointer arrow help-echo (lambda (_ _ pos)
-                                                                   ;; (let ((message-log-max nil)
-                                                                   ;;       (coords (mouse-pixel-position)))
-                                                                     (setq sketch-cursor-position (format "(%s, %s)"
-                                                                                                          (- (car coords) pos)
-                                                                                                          (cdr coords)))
-								                                                   (force-mode-line-update)))))
-                  )))
+                                        (pointer
+                                         arrow
+                                         help-echo (lambda (_ _ pos)
+                                                     ;; (let ((message-log-max nil)
+                                                     ;;       (coords (mouse-pixel-position)))
+                                                     (setq sketch-cursor-position
+                                                           (format "(%s, %s)"
+                                                                   (print (- (car coords) pos))
+                                                                   (cdr coords)))
+								                                     (force-mode-line-update))))))))
 
 (defun sketch-update (&optional lisp lisp-buffer coords)
   (unless sketch-mode
@@ -778,14 +793,35 @@ else return nil"
                                 :map `(((rect . ((0 . 0) . (,(dom-attr sketch-svg 'width) . ,(dom-attr sketch-svg 'height))))
                                         ;; :map '(((rect . ((0 . 0) . (800 . 600)))
                                         sketch
-                                        (pointer arrow help-echo (lambda (_ _ pos)
-                                                                   ;; (let ((message-log-max nil)
-                                                                   ;;       (coords (mouse-pixel-position)))
-                                                                     (setq sketch-cursor-position (format "(%s, %s)"
-                                                                                                          (- (car coords) pos)
-                                                                                                          (cdr coords)))
-								                                                   (force-mode-line-update)))))
-                  )))
+                                        (pointer
+                                         text
+                                         ;; help-echo (lambda (_ _ pos)
+                                         ;;             ;; (let ((message-log-max nil)
+                                         ;;             ;;       (coords (mouse-pixel-position)))
+                                         ;;             (setq sketch-cursor-position (format "(%s, %s)"
+                                         ;;                                                  (- (car coords) pos)
+                                         ;;                                                  (cdr coords)))
+								                         ;;             (force-mode-line-update))
+                                         ))))))
+
+
+(defun sketch-object-preview-update (object-type node start-coords end-coords &optional event points)
+  (pcase object-type
+    ("line"
+     (setf (dom-attr node 'x2) (car end-coords))
+     (setf (dom-attr node 'y2) (cdr end-coords)))
+    ("rectangle"
+     (setf (dom-attr node 'x) (car (sketch--rectangle-coords start-coords end-coords)))
+     (setf (dom-attr node 'y) (cadr (sketch--rectangle-coords start-coords end-coords)))
+     (setf (dom-attr node 'width) (caddr (sketch--rectangle-coords start-coords end-coords)))
+     (setf (dom-attr node 'height) (cadddr (sketch--rectangle-coords start-coords end-coords))))
+    ("circle"
+     (setf (dom-attr node 'r) (sketch--circle-radius start-coords end-coords)))
+    ("ellipse"
+     (setf (dom-attr node 'cx) (car (sketch--ellipse-coords start-coords end-coords)))
+     (setf (dom-attr node 'cy) (cadr (sketch--ellipse-coords start-coords end-coords)))
+     (setf (dom-attr node 'rx) (caddr (sketch--ellipse-coords start-coords end-coords)))
+     (setf (dom-attr node 'ry) (cadddr (sketch--ellipse-coords start-coords end-coords))))))
 
 (defun sketch-interactively-1 (event)
   (interactive "@e")
@@ -796,10 +832,7 @@ else return nil"
          (start-coords (if (or (not snap) (string= snap "nil"))
                            (posn-object-x-y start)
                          (sketch--snap-to-grid (posn-object-x-y start) grid-param)))
-         (end (event-end event))
-         (end-coords (if (or (not snap) (string= snap "nil"))
-                         (posn-object-x-y end)
-                       (sketch--snap-to-grid (posn-object-x-y end) grid-param)))
+         (points (list (cons (car start-coords) (cdr start-coords)))) ;; list of point needed for polyline/gon
          (object-props (list :stroke-width
                              (transient-arg-value "--stroke-width=" args)
                              :stroke
@@ -817,49 +850,77 @@ else return nil"
                                              "none"))))
          (object-type (transient-arg-value "--object=" args))
          (start-command-and-coords (pcase object-type
-                               ("line" (list 'svg-line
-                                             (car start-coords) (cdr start-coords)
-                                             (car start-coords) (cdr start-coords)))
-                               ("rectangle" `(svg-rectangle
-                                              ,@(sketch--rectangle-coords start-coords start-coords)))
-                               ("circle" (list 'svg-circle
-                                               (car start-coords) (cdr start-coords)
-                                               (sketch--circle-radius start-coords start-coords)))
-                               ("ellipse" `(svg-ellipse ,@(sketch--ellipse-coords start-coords start-coords)))))
-         ;; (end-command-and-coords (pcase object-type
-         ;;                       ("line" (list 'svg-line
-         ;;                                     (car start-coords) (cdr start-coords)
-         ;;                                     (car end-coords) (cdr end-coords)))
-         ;;                       ("rectangle" `(svg-rectangle
-         ;;                                      ,@(sketch--rectangle-coords start-coords end-coords)))
-         ;;                       ("circle" (list 'svg-circle
-         ;;                                       (car start-coords) (cdr start-coords)
-         ;;                                       (sketch--circle-radius start-coords end-coords)))
-         ;;                       ("ellipse" `(svg-ellipse ,@(sketch--ellipse-coords start-coords end-coords)))))
+                                     ("line" (list 'svg-line
+                                                   (car start-coords) (cdr start-coords)
+                                                   (car start-coords) (cdr start-coords)))
+                                     ("rectangle" `(svg-rectangle
+                                                    ,@(sketch--rectangle-coords start-coords start-coords)))
+                                     ("circle" (list 'svg-circle
+                                                     (car start-coords) (cdr start-coords)
+                                                     (sketch--circle-radius start-coords start-coords)))
+                                     ("ellipse" `(svg-ellipse ,@(sketch--ellipse-coords start-coords start-coords)))
+                                     (var (list (if (string= var "polyline")
+                                                    'svg-polyline
+                                                  'svg-polygon)
+                                                points))))
          (label (sketch-create-label object-type)))
-    (apply (car start-command-and-coords) (nth sketch-active-layer sketch-layers-list) `(,@(cdr start-command-and-coords) ,@object-props :id ,label))
-    ;; (apply (car end-command-and-coords) (nth sketch-active-layer sketch-layers-list) `(,@(cdr command-and-coords) ,@object-props :id ,label))
+    (apply (car start-command-and-coords)
+           (nth sketch-active-layer sketch-layers-list)
+           `(,@(cdr start-command-and-coords) ,@object-props :id ,label))
     (let ((node (car (dom-by-id (nth sketch-active-layer sketch-layers-list) label))))
-      (track-mouse
-        (while (not (eq (car event) 'drag-mouse-1))
-          (setq event (read-event))
-          (let ((end (posn-object-x-y (event-start event))))
-            (setf (dom-attr node 'x2) (car end))
-            (setf (dom-attr node 'y2) (cdr end)))
-          (sketch-update nil nil (cons (car end) (cdr end)))))
-          ;; (sketch-possibly-update-image sketch-svg)))
-      (let ((end (posn-object-x-y (event-end event))))
-        (setf (dom-attr node 'x2) (car end))
-        (setf (dom-attr node 'y2) (cdr end))
+      (cond ((member object-type '("line" "rectangle" "circle" "ellipse"))
+        (track-mouse
+          (while (not (eq (car event) 'drag-mouse-1))
+            (setq event (read-event))
+            (let* ((end (event-start event))
+                   (end-coords (if (or (not snap) (string= snap "nil"))
+                                   (posn-object-x-y end)
+                                 (sketch--snap-to-grid (posn-object-x-y end) grid-param))))
+              (sketch-object-preview-update object-type node start-coords end-coords)
+              (sketch-update nil nil (cons (car end-coords) (cdr end-coords))))))
+        ;; (sketch-possibly-update-image sketch-svg)))
+        (let* ((end (event-end event))
+               (end-coords (if (or (not snap) (string= snap "nil"))
+                               (posn-object-x-y end)
+                             (sketch--snap-to-grid (posn-object-x-y end) grid-param))))
+          (sketch-object-preview-update object-type node start-coords end-coords)))
+            ((member object-type '("polyline" "polygon"))
+             (track-mouse
+               (while (not (eq (car event) 'double-mouse-1))
+                 (setq event (read-event))
+                 (let* ((end (event-start event))
+                        (end-coords (if (or (not snap) (string= snap "nil"))
+                                        (posn-object-x-y end)
+                                      (sketch--snap-to-grid (posn-object-x-y end) grid-param))))
+                   (setf (dom-attr node 'points) (mapconcat (lambda (pair)
+			                                                        (format "%s %s" (car pair) (cdr pair)))
+			                                                      (reverse 
+                                                             (if (eq (car event) 'down-mouse-1)
+                                                                 (push end-coords points)
+                                                               (cons end-coords points)))
+			                                                      ", "))
+                   (sketch-update nil nil (cons (car end-coords) (cdr end-coords)))))
+               ;; (sketch-possibly-update-image sketch-svg)))
+               (let* ((end (event-end event))
+                      (end-coords (if (or (not snap) (string= snap "nil"))
+                                      (posn-object-x-y end)
+                                    (sketch--snap-to-grid (posn-object-x-y end) grid-param))))
+                 (setf (dom-attr node 'points) (mapconcat (lambda (pair)
+			                                                      (format "%s %s" (car pair) (cdr pair)))
+			                                                    (reverse 
+                                                           (if (eq (car event) 'down-mouse-1)
+                                                               (push end-coords points)
+                                                             (cons end-coords points)))
+			                                                    ", "))))))
         ;; (sketch-possibly-update-image sketch-svg
         ;;                               :pointer 'arrow
         ;;                               :map `(((rect . ((0 . 0) . (,(dom-attr sketch-svg 'width) . ,(dom-attr sketch-svg 'height))))
         ;;                                       ;; :map '(((rect . ((0 . 0) . (800 . 600)))
         ;;                                       sketch
         ;;                                       (pointer arrow))))
-        (when-let (buf (get-buffer "*sketch-root*"))
-          (sketch-update-lisp-window sketch-root buf))
-        (sketch-redraw)))))
+      (when-let (buf (get-buffer "*sketch-root*"))
+        (sketch-update-lisp-window sketch-root buf))
+        (sketch-redraw))))
 
 (transient-define-suffix sketch-remove-object ()
   (interactive)
