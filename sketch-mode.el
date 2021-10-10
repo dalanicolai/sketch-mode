@@ -77,6 +77,7 @@
 (require 'transient)
 (require 'cl-lib)
 (require 'sgml-mode)
+(require 'shr-color)
 
 (defgroup sketch nil
   "Configure default sketch (object) properties."
@@ -198,6 +199,109 @@ STOPS is a list of percentage/color pairs."
          :transform "translate(0,0)"
          args))
 
+;; Web/SVG colors
+(defun sketch-colors-sort (colors-rgb-alist)
+  (let ((list-colors-sort 'hsv))
+    ;; color sort function in courtesy of facemenu.el
+    ;; (colors-sorted (mapcar (lambda (c) (cons c (color-name-to-rgb c))) (defined-colors)))
+    ;; Schwartzian transform with `(color key1 key2 key3 ...)'.
+    (setq list (mapcar
+		            'car
+		            (sort (delq nil (mapcar
+				                         (lambda (c)
+				                           (let ((key (list-colors-sort-key
+						                                   (car c))))
+				                             (when key
+					                             (cons c (if (consp key) key
+						                                     (list key))))))
+				                         colors-rgb-alist)) ;; HERE IS THE LIST
+			                (lambda (a b)
+			                  (let* ((a-keys (cdr a))
+				                       (b-keys (cdr b))
+				                       (a-key (car a-keys))
+				                       (b-key (car b-keys)))
+			                    ;; Skip common keys at the beginning of key lists.
+			                    (while (and a-key b-key (equal a-key b-key))
+			                      (setq a-keys (cdr a-keys) a-key (car a-keys)
+				                          b-keys (cdr b-keys) b-key (car b-keys)))
+			                    (cond
+			                     ((and (numberp a-key) (numberp b-key))
+			                      (< a-key b-key))
+			                     ((and (stringp a-key) (stringp b-key))
+			                      (string< a-key b-key))))))))))
+
+;; Adapted from `read-color'
+(defun read-color-web (&optional prompt convert-to-RGB)
+  "Read a color name or RGB triplet.
+Completion is available for color names, but not for RGB triplets.
+
+RGB triplets have the form \"#RRGGBB\".  Each of the R, G, and B
+components can have one to four digits, but all three components
+must have the same number of digits.  Each digit is a hex value
+between 0 and F; either upper case or lower case for A through F
+are acceptable.
+
+In addition to standard color names and RGB hex values, the
+following are available as color candidates.  In each case, the
+corresponding color is used.
+
+ * `foreground at point'   - foreground under the cursor
+ * `background at point'   - background under the cursor
+
+Optional arg PROMPT is the prompt; if nil, use a default prompt.
+
+Interactively, or with optional arg CONVERT-TO-RGB-P non-nil,
+convert an input color name to an RGB hex string.  Return the RGB
+hex string.
+
+Interactively, displays a list of colored completions.  If optional
+argument FOREGROUND is non-nil, shows them as foregrounds, otherwise
+as backgrounds."
+  (interactive "i\np")    ; Always convert to RGB interactively.
+  (let* ((completion-ignore-case t)
+	       (colors (mapcar
+                  (lambda (color-name)
+                    (let ((color (copy-sequence color-name)))
+                      (propertize color 'face
+		                                (list :foreground (readable-foreground-color color-name)
+                                          :background color))))
+                  (mapcar #'car (sketch-colors-sort shr-color-html-colors-alist))))
+	 (color (completing-read
+		 (or prompt "Color (name or #RGB triplet): ")
+		 ;; Completing function for reading colors, accepting
+		 ;; both color names and RGB triplets.
+		 (lambda (string pred flag)
+		   (cond
+		    ((null flag)        ; Try completion.
+		     (or (try-completion string colors pred)
+			 (if (color-defined-p string)
+			     string)))
+		    ((eq flag t)        ; List all completions.
+		     (or (all-completions string colors pred)
+			 (if (color-defined-p string)
+			     (list string))))
+		    ((eq flag 'lambda)  ; Test completion.
+		     (or (member string colors)
+			 (color-defined-p string)))))
+		 nil t)))
+
+    ;; Process named colors.
+    (when (member color colors)
+      (cond ((string-equal color "foreground at point")
+	     (setq color (foreground-color-at-point)))
+	    ((string-equal color "background at point")
+	     (setq color (background-color-at-point))))
+      (when (and convert-to-RGB
+		 (not (string-equal color "")))
+	(let ((components (x-color-values color)))
+	  (unless (string-match-p "^#\\(?:[[:xdigit:]][[:xdigit:]][[:xdigit:]]\\)+$" color)
+	    (setq color (format "#%04X%04X%04X"
+				(logand 65535 (nth 0 components))
+				(logand 65535 (nth 1 components))
+				(logand 65535 (nth 2 components))))))))
+    color))
+
+;; minor-mode
 (define-minor-mode sketch-mode
   "Create svg images using the mouse.
 In sketch-mode buffer press \\[sketch-transient] to activate the
@@ -386,7 +490,7 @@ else return nil"
    (default     :initarg :default     :initform nil)))
 
 (cl-defmethod transient-infix-read ((_obj sketch-variable:colors))
-  (read-color "Select color: "))
+  (read-color-web "Select color: "))
 
 (cl-defmethod transient-infix-value ((obj sketch-variable:colors))
   (let ((default (oref obj default)))
