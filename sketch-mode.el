@@ -859,16 +859,14 @@ else return nil"
                                 :map `(((rect . ((0 . 0) . (,(dom-attr sketch-svg 'width) . ,(dom-attr sketch-svg 'height))))
                                         ;; :map '(((rect . ((0 . 0) . (800 . 600)))
                                         sketch
-                                        (pointer
-                                         arrow
-                                         help-echo (lambda (_ _ pos)
-                                                     ;; (let ((message-log-max nil)
-                                                     ;;       (coords (mouse-pixel-position)))
-                                                     (setq sketch-cursor-position
-                                                           (format "(%s, %s)"
-                                                                   (print (- (car coords) pos))
-                                                                   (cdr coords)))
-								                                     (force-mode-line-update))))))))
+                                        (pointer arrow help-echo (lambda (_ _ pos)
+                                                                   (let (
+                                                                         ;; (message-log-max nil)
+                                                                         (coords (cdr (mouse-pixel-position))))
+                                                                     (setq sketch-cursor-position (format "(%s, %s)"
+                                                                                                          (- (car coords) sketch-im-x-offset)
+                                                                                                          (+ (cdr coords) sketch-im-y-offset))))
+								                                                   (force-mode-line-update))))))))
 
 (defun sketch-update (&optional lisp lisp-buffer coords)
   (unless sketch-mode
@@ -897,16 +895,7 @@ else return nil"
                                 :map `(((rect . ((0 . 0) . (,(dom-attr sketch-svg 'width) . ,(dom-attr sketch-svg 'height))))
                                         ;; :map '(((rect . ((0 . 0) . (800 . 600)))
                                         sketch
-                                        (pointer
-                                         text
-                                         ;; help-echo (lambda (_ _ pos)
-                                         ;;             ;; (let ((message-log-max nil)
-                                         ;;             ;;       (coords (mouse-pixel-position)))
-                                         ;;             (setq sketch-cursor-position (format "(%s, %s)"
-                                         ;;                                                  (- (car coords) pos)
-                                         ;;                                                  (cdr coords)))
-								                         ;;             (force-mode-line-update))
-                                         ))))))
+                                        (pointer arrow))))))
 
 
 (defun sketch-object-preview-update (object-type node start-coords end-coords &optional event points)
@@ -981,7 +970,11 @@ else return nil"
                                    (posn-object-x-y end)
                                  (sketch--snap-to-grid (posn-object-x-y end) grid-param))))
               (sketch-object-preview-update object-type node start-coords end-coords)
-              (sketch-update nil nil (cons (car end-coords) (cdr end-coords))))))
+              (sketch-update nil nil (cons (car end-coords) (cdr end-coords)))
+              (setq sketch-cursor-position (format "(%s, %s)"
+                                                   (car end-coords)
+                                                   (cdr end-coords)))
+		          (force-mode-line-update))))
         ;; (sketch-possibly-update-image sketch-svg)))
         (let* ((end (event-end event))
                (end-coords (if (or (not snap) (string= snap "nil"))
@@ -1003,7 +996,11 @@ else return nil"
                                                                  (push end-coords points)
                                                                (cons end-coords points)))
 			                                                      ", "))
-                   (sketch-update nil nil (cons (car end-coords) (cdr end-coords)))))
+                   (sketch-update nil nil (cons (car end-coords) (cdr end-coords)))
+                   (setq sketch-cursor-position (format "(%s, %s)"
+                                                        (car end-coords)
+                                                        (cdr end-coords)))
+		               (force-mode-line-update)))
                ;; (sketch-possibly-update-image sketch-svg)))
                (let* ((end (event-end event))
                       (end-coords (if (or (not snap) (string= snap "nil"))
