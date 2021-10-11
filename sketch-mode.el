@@ -315,7 +315,8 @@ transient."
     (,(kbd "C-c C-s") . sketch-transient))
   (if (boundp 'undo-tree-mode)
       (undo-tree-mode)
-    (buffer-enable-undo)))
+    (buffer-enable-undo)
+    (blink-cursor-mode 0)))
 
 (defun sketch-mapcons (fn &rest cons-cells)
   "Apply FN to list of car's and cdr's of CONS-CELLS.
@@ -400,8 +401,8 @@ Optionally set a custom GRID-PARAMETER (default is value of
                                                                      (setq sketch-cursor-position (format "(%s, %s)"
                                                                                                           (- (car coords) sketch-im-x-offset)
                                                                                                           (+ (cdr coords) sketch-im-y-offset))))
-								                                                   (force-mode-line-update)))))
-                  )))
+								                                                   (force-mode-line-update))))))
+    (backward-char)))
 
 ;; FIXME: `defvar' can't be meaningfully inside a function like that.
 ;; FIXME: Use a `sketch-' prefix for all dynbound vars.
@@ -868,7 +869,8 @@ else return nil"
                                                                      (setq sketch-cursor-position (format "(%s, %s)"
                                                                                                           (- (car coords) sketch-im-x-offset)
                                                                                                           (+ (cdr coords) sketch-im-y-offset))))
-								                                                   (force-mode-line-update))))))))
+								                                                   (force-mode-line-update))))))
+    (backward-char)))
 
 (defun sketch-update (&optional lisp lisp-buffer)
   (unless sketch-mode
@@ -897,7 +899,8 @@ else return nil"
                                 :map `(((rect . ((0 . 0) . (,(dom-attr sketch-svg 'width) . ,(dom-attr sketch-svg 'height))))
                                         ;; :map '(((rect . ((0 . 0) . (800 . 600)))
                                         sketch
-                                        (pointer arrow))))))
+                                        (pointer arrow))))
+    (backward-char)))
 
 
 (defun sketch-object-preview-update (object-type node start-coords end-coords)
