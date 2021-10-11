@@ -205,30 +205,31 @@ STOPS is a list of percentage/color pairs."
     ;; color sort function in courtesy of facemenu.el
     ;; (colors-sorted (mapcar (lambda (c) (cons c (color-name-to-rgb c))) (defined-colors)))
     ;; Schwartzian transform with `(color key1 key2 key3 ...)'.
-    (setq list (mapcar
-		            'car
-		            (sort (delq nil (mapcar
-				                         (lambda (c)
-				                           (let ((key (list-colors-sort-key
-						                                   (car c))))
-				                             (when key
-					                             (cons c (if (consp key) key
-						                                     (list key))))))
-				                         colors-rgb-alist)) ;; HERE IS THE LIST
-			                (lambda (a b)
-			                  (let* ((a-keys (cdr a))
-				                       (b-keys (cdr b))
-				                       (a-key (car a-keys))
-				                       (b-key (car b-keys)))
-			                    ;; Skip common keys at the beginning of key lists.
-			                    (while (and a-key b-key (equal a-key b-key))
-			                      (setq a-keys (cdr a-keys) a-key (car a-keys)
-				                          b-keys (cdr b-keys) b-key (car b-keys)))
-			                    (cond
-			                     ((and (numberp a-key) (numberp b-key))
-			                      (< a-key b-key))
-			                     ((and (stringp a-key) (stringp b-key))
-			                      (string< a-key b-key))))))))))
+    (mapcar
+		 'car
+		 (sort (delq nil (mapcar
+				              (lambda (c)
+				                (let ((key (list-colors-sort-key
+						                        (car c))))
+				                  (when key
+					                  (cons c (if (consp key)
+                                        key
+						                          (list key))))))
+				              colors-rgb-alist)) ;; HERE IS THE LIST
+			     (lambda (a b)
+			       (let* ((a-keys (cdr a))
+				            (b-keys (cdr b))
+				            (a-key (car a-keys))
+				            (b-key (car b-keys)))
+			         ;; Skip common keys at the beginning of key lists.
+			         (while (and a-key b-key (equal a-key b-key))
+			           (setq a-keys (cdr a-keys) a-key (car a-keys)
+				               b-keys (cdr b-keys) b-key (car b-keys)))
+			         (cond
+			          ((and (numberp a-key) (numberp b-key))
+			           (< a-key b-key))
+			          ((and (stringp a-key) (stringp b-key))
+			           (string< a-key b-key)))))))))
 
 ;; Adapted from `read-color'
 (defun read-color-web (&optional prompt convert-to-RGB)
@@ -833,7 +834,7 @@ else return nil"
 ;;     ) ;; TODO make it work for all types of elements
 ;;   node))
 
-(defun sketch-redraw (&optional lisp lisp-buffer coords)
+(defun sketch-redraw (&optional lisp lisp-buffer)
   (unless sketch-mode
     (user-error "Not in sketch-mode buffer"))
   (save-current-buffer
@@ -869,7 +870,7 @@ else return nil"
                                                                                                           (+ (cdr coords) sketch-im-y-offset))))
 								                                                   (force-mode-line-update))))))))
 
-(defun sketch-update (&optional lisp lisp-buffer coords)
+(defun sketch-update (&optional lisp lisp-buffer)
   (unless sketch-mode
     (user-error "Not in sketch-mode buffer"))
   (save-current-buffer
@@ -899,7 +900,7 @@ else return nil"
                                         (pointer arrow))))))
 
 
-(defun sketch-object-preview-update (object-type node start-coords end-coords &optional event points)
+(defun sketch-object-preview-update (object-type node start-coords end-coords)
   (pcase object-type
     ("line"
      (setf (dom-attr node 'x2) (car end-coords))
@@ -971,7 +972,7 @@ else return nil"
                                    (posn-object-x-y end)
                                  (sketch--snap-to-grid (posn-object-x-y end) grid-param))))
               (sketch-object-preview-update object-type node start-coords end-coords)
-              (sketch-update nil nil (cons (car end-coords) (cdr end-coords)))
+              (sketch-update)
               (setq sketch-cursor-position (format "(%s, %s)"
                                                    (car end-coords)
                                                    (cdr end-coords)))
@@ -997,7 +998,7 @@ else return nil"
                                                                  (push end-coords points)
                                                                (cons end-coords points)))
 			                                                      ", "))
-                   (sketch-update nil nil (cons (car end-coords) (cdr end-coords)))
+                   (sketch-update)
                    (setq sketch-cursor-position (format "(%s, %s)"
                                                         (car end-coords)
                                                         (cdr end-coords)))
@@ -1028,7 +1029,7 @@ else return nil"
 			                                                        (format "%s %s" (car pair) (cdr pair)))
 			                                                      (reverse (cl-pushnew end-coords points))
 			                                                      ", "))
-                   (sketch-update nil nil (cons (car end-coords) (cdr end-coords)))
+                   (sketch-update)
                    (setq sketch-cursor-position (format "(%s, %s)"
                                                         (car end-coords)
                                                         (cdr end-coords)))
@@ -1312,18 +1313,10 @@ PROPS is passed on to `create-image' as its PROPS list."
 If the SVG is later changed, the image will also be updated."
   (let ((image (apply #'sketch-image svg props))
 	      (marker (point-marker)))
-    (insert-image image string)))
-    ;; (dom-set-attribute svg :image marker)))
+    (insert-image image string)
+    (dom-set-attribute svg :image marker)))
 
 (defun sketch-possibly-update-image (svg)
-  (let ((marker (dom-attr svg :image)))
-    (when (and marker
-	             (buffer-live-p (marker-buffer marker)))
-      (with-current-buffer (marker-buffer marker)
-	      (put-text-property marker (1+ marker) 'display (svg-image svg))))))
-
-(defun sketch-possibly-update-image (svg)
-  "Exact copy of svg-possibly-update-image."
   (let ((marker (dom-attr svg :image)))
     (when (and marker
 	             (buffer-live-p (marker-buffer marker)))
