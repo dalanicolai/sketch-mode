@@ -605,7 +605,7 @@ else return nil"
   :description "Option with list"
   :class 'sketch-variable:choices
   :argument "--object="
-  :choices '("rectangle" "circle" "ellipse" "polyline" "polygon")
+  :choices '("rectangle" "circle" "ellipse" "polyline" "polygon" "freehand")
   :default "line")
 
 (transient-define-infix sketch-stroke-color ()
