@@ -402,7 +402,7 @@ Optionally set a custom GRID-PARAMETER (default is value of
                                                                                                           (- (car coords) sketch-im-x-offset)
                                                                                                           (+ (cdr coords) sketch-im-y-offset))))
 								                                                   (force-mode-line-update))))))
-    (backward-char)))
+    (beginning-of-line)))
 
 ;; FIXME: `defvar' can't be meaningfully inside a function like that.
 ;; FIXME: Use a `sketch-' prefix for all dynbound vars.
@@ -870,7 +870,7 @@ else return nil"
                                                                                                           (- (car coords) sketch-im-x-offset)
                                                                                                           (+ (cdr coords) sketch-im-y-offset))))
 								                                                   (force-mode-line-update))))))
-    (backward-char)))
+    (beginning-of-line)))
 
 (defun sketch-update (&optional lisp lisp-buffer)
   (unless sketch-mode
@@ -900,7 +900,7 @@ else return nil"
                                         ;; :map '(((rect . ((0 . 0) . (800 . 600)))
                                         sketch
                                         (pointer arrow))))
-    (backward-char)))
+    (beginning-of-line)))
 
 
 (defun sketch-object-preview-update (object-type node start-coords end-coords)
