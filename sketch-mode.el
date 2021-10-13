@@ -463,6 +463,7 @@ transient."
   :keymap
   `(
     ([sketch down-mouse-1] . sketch-interactively-1)
+    ([sketch double-mouse-1] . sketch-text-interactively)
     ([w1 mouse-1] . sketch-mouse-set-stroke-width)
     ([w2 mouse-1] . sketch-mouse-set-stroke-width)
     ([w3 mouse-1] . sketch-mouse-set-stroke-width)
@@ -528,7 +529,7 @@ VEC should be a cons or a list containing only number elements."
 (defvar-local show-layers nil)
 (defvar-local sketch-cursor-position nil)
 
-(defvar sketch-object "line")
+(defvar sketch-object 'line)
 (defvar sketch-stroke-color "black")
 (defvar sketch-fill-color "none")
 (defvar sketch-stroke-width 1)
@@ -619,8 +620,9 @@ values"
    (default     :initarg :default     :initform nil)))
 
 (cl-defmethod transient-infix-read ((obj sketch-variable:choices))
-  (let ((choices (oref obj choices)))
-    (if-let ((value (oref obj value)))
+  (let ((choices (oref obj choices))
+        (value (oref obj value)))
+    (if value
         (cadr (member value choices))
       (car choices))))
 
@@ -628,8 +630,9 @@ values"
   "Return the value of OBJ's `value' slot if non-nil,
 else return value of OBJ's `default' slot if non-nil,
 else return nil"
-  (let ((default (oref obj default)))
-    (if-let ((value (oref obj value)))
+  (let ((default (oref obj default))
+        (value (oref obj value)))
+    (if value
         (concat (oref obj argument) value)
       (when default
         (concat (oref obj argument) default)))))
@@ -706,6 +709,37 @@ else return nil"
   (let ((choices (oref obj choices)))
     (string-to-number (completing-read "Enter width (float also allowed): " choices))))
 
+(defclass sketch-lisp-variable:object (sketch-lisp-variable:option)
+  ())
+
+(cl-defmethod transient-infix-read ((obj sketch-lisp-variable:object))
+  (let ((choices (oref obj choices))
+        (value (oref obj value)))
+    (or (cadr (member value choices)) (car choices))))
+
+(cl-defmethod transient-format-description ((obj sketch-lisp-variable:object))
+  (or (oref obj description)
+      (symbol-name (oref obj variable))))
+
+;; (cl-defmethod transient-format-value ((obj sketch-lisp-variable:choices))
+;;   (propertize (prin1-to-string (oref obj value))
+;;               'face 'transient-value))
+
+(cl-defmethod transient-format-value ((obj sketch-lisp-variable:object))
+  (let ((value (symbol-name (oref obj value)))
+        (choices (mapcar #'symbol-name (oref obj choices))))
+    (concat
+     (propertize "[" 'face 'transient-inactive-value)
+     (mapconcat (lambda (choice)
+                  (propertize choice 'face (if (equal choice value)
+                                               (if (member choice choices)
+                                                   'transient-value
+                                                 'font-lock-warning-face)
+                                             'transient-inactive-value)))
+                choices
+                (propertize "|" 'face 'transient-inactive-value))
+     (propertize "]" 'face 'transient-inactive-value))))
+
 ;; (value (oref obj value)))
 ;; (or (cadr (member value choices)) (car choices))))
 
@@ -769,13 +803,13 @@ else return nil"
 ;;                                            "url(#arrow)"
 ;;                                          "none"))))
 ;;      (command-and-coords (pcase (transient-arg-value "--object=" args)
-;;                            ("line" (list 'svg-line
+;;                            ('line (list 'svg-line
 ;;                                          (car start-coords) (cdr start-coords) (car end-coords) (cdr end-coords)))
-;;                            ("rectangle" `(svg-rectangle ,@(sketch--rectangle-coords start-coords end-coords)))
-;;                            ("circle" (list 'svg-circle
+;;                            ('rectangle `(svg-rectangle ,@(sketch--rectangle-coords start-coords end-coords)))
+;;                            ('circle (list 'svg-circle
 ;;                                            (car start-coords) (cdr start-coords)
 ;;                                            (sketch--circle-radius start-coords end-coords)))
-;;                            ("ellipse" `(svg-ellipse ,@(sketch--ellipse-coords start-coords end-coords))))))
+;;                            ('ellipse `(svg-ellipse ,@(sketch--ellipse-coords start-coords end-coords))))))
 ;; (apply (car command-and-coords) sketch-root `(,@(cdr command-and-coords) ,@object-props :id ,(sketch-create-label)))
 ;; (sketch-redraw)))
 
@@ -806,7 +840,7 @@ else return nil"
     ("A" "Add layer" sketch-add-layer)]]
   ["Commands"
    [([sketch down-mouse-1] "Draw object"  sketch-interactively-1)
-    ([sketch mouse-1] "Draw text"  sketch-text-interactively)
+    ([sketch double-mouse-1] "Draw text"  sketch-text-interactively)
     ([sketch C-S-drag-mouse-1] "Crop image" sketch-crop)
     ;; ("T" "Polyline" test-mouse)
     ;; ([sketch S-down-mouse-1] "Track mouse" sketch-line)
@@ -827,10 +861,9 @@ else return nil"
 
 (transient-define-infix sketch-object ()
   :description "Option with list"
-  :class 'sketch-variable:choices
-  :argument "--object="
-  :choices '("rectangle" "circle" "ellipse" "polyline" "polygon" "freehand")
-  :default "line")
+  :class 'sketch-lisp-variable:object
+  :variable 'sketch-object
+  :choices '(line polyline rectangle circle ellipse freehand))
 
 (transient-define-infix sketch-stroke-color ()
   :description "Option with list"
@@ -988,15 +1021,15 @@ else return nil"
   (let* ((prefix (concat (when (/= sketch-active-layer 0)
                            (number-to-string sketch-active-layer))
                          (pcase type
-                           ("line" "l")
-                           ("rectangle" "r")
-                           ("circle" "c")
-                           ("ellipse" "e")
-                           ("polyline" "p")
-                           ("polygon" "g")
-                           ("freehand" "f")
-                           ("text" "t")
-                           ("group" "g"))))
+                           ('line "l")
+                           ('rectangle "r")
+                           ('circle "c")
+                           ('ellipse "e")
+                           ('polyline "p")
+                           ('polygon "g")
+                           ('freehand "f")
+                           ('text "t")
+                           ('group "g"))))
          (idx 0)
          (label (concat prefix (number-to-string idx)))
          (labels (sketch-labels-list)))
@@ -1134,17 +1167,17 @@ else return nil"
 
 (defun sketch-object-preview-update (object-type node start-coords end-coords)
   (pcase object-type
-    ("line"
+    ('line
      (setf (dom-attr node 'x2) (car end-coords))
      (setf (dom-attr node 'y2) (cdr end-coords)))
-    ("rectangle"
+    ('rectangle
      (setf (dom-attr node 'x) (car (sketch--rectangle-coords start-coords end-coords)))
      (setf (dom-attr node 'y) (cadr (sketch--rectangle-coords start-coords end-coords)))
      (setf (dom-attr node 'width) (caddr (sketch--rectangle-coords start-coords end-coords)))
      (setf (dom-attr node 'height) (cadddr (sketch--rectangle-coords start-coords end-coords))))
-    ("circle"
+    ('circle
      (setf (dom-attr node 'r) (sketch--circle-radius start-coords end-coords)))
-    ("ellipse"
+    ('ellipse
      (setf (dom-attr node 'cx) (car (sketch--ellipse-coords start-coords end-coords)))
      (setf (dom-attr node 'cy) (cadr (sketch--ellipse-coords start-coords end-coords)))
      (setf (dom-attr node 'rx) (caddr (sketch--ellipse-coords start-coords end-coords)))
@@ -1180,25 +1213,25 @@ else return nil"
                                                "url(#arrow)"
                                              "none"))))
          (start-command-and-coords (pcase sketch-object
-                                     ("line" (list 'svg-line
+                                     ('line (list 'svg-line
                                                    (car start-coords) (cdr start-coords)
                                                    (car start-coords) (cdr start-coords)))
-                                     ("rectangle" `(svg-rectangle
+                                     ('rectangle `(svg-rectangle
                                                     ,@(sketch--rectangle-coords start-coords start-coords)))
-                                     ("circle" (list 'svg-circle
+                                     ('circle (list 'svg-circle
                                                      (car start-coords) (cdr start-coords)
                                                      (sketch--circle-radius start-coords start-coords)))
-                                     ("ellipse" `(svg-ellipse ,@(sketch--ellipse-coords start-coords start-coords)))
+                                     ('ellipse `(svg-ellipse ,@(sketch--ellipse-coords start-coords start-coords)))
                                      (var (list (pcase var 
-                                                  ((or "polyline" "freehand") 'svg-polyline)
-                                                  ("polygon" 'svg-polygon))
+                                                  ((or 'polyline 'freehand) 'svg-polyline)
+                                                  ('polygon 'svg-polygon))
                                                 points))))
          (label (sketch-create-label sketch-object)))
     (apply (car start-command-and-coords)
            (nth sketch-active-layer sketch-layers-list)
            `(,@(cdr start-command-and-coords) ,@object-props :id ,label))
     (let ((node (car (dom-by-id (nth sketch-active-layer sketch-layers-list) label))))
-      (cond ((member sketch-object '("line" "rectangle" "circle" "ellipse"))
+      (cond ((member sketch-object '(line rectangle circle ellipse))
              (track-mouse
                (while (not (eq (car event) 'drag-mouse-1))
                  (setq event (read-event))
@@ -1218,7 +1251,7 @@ else return nil"
                                     (posn-object-x-y end)
                                   (sketch--snap-to-grid (posn-object-x-y end) grid-param))))
                (sketch-object-preview-update sketch-object node start-coords end-coords)))
-            ((member sketch-object '("polyline" "polygon"))
+            ((member sketch-object '(polyline polygon))
              (track-mouse
                (while (not (eq (car event) 'double-mouse-1))
                  (setq event (read-event))
@@ -1250,7 +1283,7 @@ else return nil"
                                                                (push end-coords points)
                                                              (cons end-coords points)))
 			                                                    ", ")))))
-            ((string= sketch-object "freehand")
+            ((string= sketch-object 'freehand)
              (track-mouse
                (while (not (eq (car event) 'drag-mouse-1))
                  (setq event (read-event))
@@ -1290,7 +1323,7 @@ else return nil"
   (interactive "@e")
   (let ((coords (posn-object-x-y (event-start event)))
         (node (oref transient-current-prefix value))
-        (label (sketch-create-label "group")))
+        (label (sketch-create-label 'group)))
     (dom-set-attribute node
                        'transform
                        (format "translate(%s,%s)" (car coords) (cdr coords)))
@@ -1314,7 +1347,7 @@ else return nil"
            (snippet (if (dom-by-tag dom 'g)
                         (dom-elements dom 'id (number-to-string idx))
                       (list (dom-append-child
-                             (sketch-group (sketch-create-label "group"))
+                             (sketch-group (sketch-create-label 'group))
                              (car (dom-children dom)))))))
       (sketch-redraw)
       (transient-setup 'sketch-import nil nil :value (car snippet)))))
@@ -1419,7 +1452,7 @@ else return nil"
     ;;               (if sketch-include-end-marker
     ;;                   "url(#arrow)"
     ;;                 "none"))))
-    (apply #'svg-text (nth sketch-active-layer sketch-layers-list) text :x (car coords) :y (cdr coords) :id (sketch-create-label "text") object-props))
+    (apply #'svg-text (nth sketch-active-layer sketch-layers-list) text :x (car coords) :y (cdr coords) :id (sketch-create-label 'text) object-props))
   (sketch-redraw))
 
 (transient-define-infix sketch-select-font ()
