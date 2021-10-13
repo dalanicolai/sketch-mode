@@ -302,157 +302,147 @@ as backgrounds."
 				                        (logand 65535 (nth 2 components))))))))
     color))
 
-(setq sketch-colors-basic '("White" "Silver" "Gray" "Black"
+(defvar sketch-object 'line)
+(defvar sketch-stroke-color "Black")
+(defvar sketch-fill-color "none")
+(defvar sketch-stroke-width 1)
+(defvar sketch-stroke-dasharray nil)
+
+(defvar sketch-colors-basic '("White" "Silver" "Gray" "Black"
                             "Red" "Maroon" "Yellow" "Olive"
                             "Lime" "Green" "Aqua" "Teal"
                             "Blue" "Navy" "Fuchsia" "Purple"))
 
-(setq color-name-hex-alist
-      (mapcar (lambda (c) (cons c (apply #'color-rgb-to-hex (color-name-to-rgb c))))
-              (defined-colors)))
+;;; Toolbar
+(defun sketch-toolbar-refresh ()
+  (let ((buf (get-buffer "*sketch-toolbar*")))
+    (with-current-buffer buf
+      (erase-buffer)
+      (sketch-toolbar-colors)
+      (insert "\n\n")
+      (sketch-toolbar-widths)
+      (goto-char (point-min)))))
 
-(defun sketch-color-lightness (color-name)
-  (let* ((rgb (color-name-to-rgb color-name))
-         (hsl (apply #'color-rgb-to-hsl rgb)))
-    (nth 2 hsl)))
-
-(defun sketch-colors-rgb-to-name (rgb)
-  (let ((hex (apply #'color-rgb-to-hex rgb)))
-    (car (rassoc hex color-name-hex-alist))))
-
-(setq sketch-colors-basic-alist (mapcar (lambda (c)
-                                          (assoc c shr-color-html-colors-alist 'string=))
-                                        sketch-colors-basic))
+(defun sketch-toggle-toolbar ()
+  (interactive)
+  (let ((win (get-buffer-window "*sketch-toolbar*")))
+    (if win
+        (delete-window win)
+      (let ((buffer (get-buffer-create "*sketch-toolbar*")))
+        (set-window-dedicated-p
+         (display-buffer-in-side-window (get-buffer-create "*sketch-toolbar*")
+                                        '((side . right) (window-width . 20)))
+         t)
+        (with-current-buffer buffer
+          (setq cursor-type nil))
+        (sketch-toolbar-refresh)))))
 
 (defun sketch-toolbar-colors ()
-  (goto-char (point-max))
-  (insert "\n\n")
-  (insert (propertize "STROKE COLOR: "))
-  (dolist (color sketch-colors-basic)
-    (insert-text-button
-     ;; (if (string= color sketch-stroke-color)
-     ;;                        " O "
-     "   "
-     ;; )
-     'action (lambda (button) (interactive)
-               (setq sketch-stroke-color (car (rassoc (plist-get (button-get button 'face) :background) shr-color-html-colors-alist)))
-               (sketch-redraw)
-               (transient-quit-all)
-               (sketch-transient))
-     'face (list
-            ;; :foreground (cond ((sketch-colors-rgb-to-name (color-complement color)))
-            ;;                   ((<= (sketch-color-lightness color) 0.5)
-            ;;                    "white")
-            ;;                   (t
-            ;;                    "black"))
-            :background  (alist-get color shr-color-html-colors-alist nil nil 'string=)))
-    (insert " "))
+  (insert (propertize "STROKE COLOR\n"))
+  (insert-text-button "   "
+                       'action
+                            (lambda (button) (interactive)
+                              (setq sketch-stroke-color (plist-get (button-get button 'face) :background)))
+                      'face (list :background
+                                  (alist-get sketch-stroke-color
+                                             shr-color-html-colors-alist
+                                             nil nil 'string=)))
+  (insert " ")
+  (insert (if (string= sketch-stroke-color "none")
+              "none"
+            sketch-stroke-color))
+  (insert "\n")
   (insert-text-button "none"
                       'action (lambda (button) (interactive)
                                 (setq sketch-stroke-color "none")
-                                (sketch-redraw)))
-  (insert ": ")
-  (insert-text-button "   "
-                      'action (lambda (button) (interactive)
-                                (setq sketch-stroke-color (plist-get (button-get button 'face) :background))
-                                (sketch-redraw))
-                      'face (list :background (alist-get sketch-stroke-color shr-color-html-colors-alist nil nil 'string=)))
-  (insert " ")
-  (insert sketch-stroke-color)
+                                (sketch-toolbar-refresh)))
   (insert "\n\n")
-  (insert (propertize "FILL COLOR:   " ))
-  (dolist (color sketch-colors-basic)
-    (insert-text-button
-     ;; (if (string= color sketch-fill-color)
-     ;;     " O "
-     "   "
-     ;; )
-     'action (lambda (button) (interactive)
-               (setq sketch-fill-color (car (rassoc (plist-get (button-get button 'face) :background) shr-color-html-colors-alist)))
-               (sketch-redraw)
-               (transient-quit-all)
-               (sketch-transient))
-     'face (list
-            ;; :foreground (cond ((sketch-colors-rgb-to-name (color-complement color)))
-            ;;                   ((<= (sketch-color-lightness color) 0.5)
-            ;;                    "white")
-            ;;                   (t
-            ;;                    "black"))
-            :background  (alist-get color shr-color-html-colors-alist nil nil 'string=)))
-    (insert " "))
-  (insert-text-button "none"
-                      'action (lambda (button) (interactive)
-                                (setq sketch-fill-color "none")
-                                (sketch-redraw)))
-  (insert ": ")
+  (let ((counter 0))
+    (dolist (color sketch-colors-basic)
+      (insert-text-button "   "
+                          'action
+                          (lambda (button) (interactive)
+                                    (setq sketch-stroke-color
+                                          (car (rassoc (plist-get (button-get button 'face) :background)
+                                                       shr-color-html-colors-alist)))
+                                    (sketch-toolbar-refresh)
+                                    (transient-quit-all)
+                                    (call-interactively #'sketch-transient))
+                          'face (list
+                                 :background (alist-get color shr-color-html-colors-alist nil nil 'string=)))
+      (setq counter (1+ counter))
+      (if (not (= counter 4))
+          (insert " ")
+        (insert "\n\n")
+        (setq counter 0))))
+
+   (insert "\n\n")
+
+  (insert (propertize "FILL COLOR\n"))
   (insert-text-button "   "
-                      'action (lambda (button)
-                                (interactive)
-                                (setq sketch-stroke-color (plist-get (button-get button 'face) :background))
-                                (sketch-redraw))
-                      'face (list :background sketch-fill-color))
+                       'action
+                            (lambda (button) (interactive)
+                              (print sketch-fill-color))
+                      'face (list :background (alist-get sketch-fill-color
+                                                         shr-color-html-colors-alist
+                                                         nil nil 'string=)))
   (insert " ")
-  (insert sketch-fill-color))
+  (insert (if (string= sketch-fill-color "none")
+              "none"
+            sketch-fill-color))
+  (insert "\n")
+  (insert-text-button "none"
+                      'action (lambda (_) (interactive)
+                                (setq sketch-fill-color "none")
+                                (sketch-toolbar-refresh)))
+  (insert "\n\n")
+  (let ((counter 0))
+    (dolist (color sketch-colors-basic)
+      (insert-text-button "   "
+                          'action
+                          (lambda (button) (interactive)
+                            (setq sketch-fill-color
+                                  (car (rassoc (plist-get (button-get button 'face) :background)
+                                               shr-color-html-colors-alist)))
+                            (sketch-toolbar-refresh)
+                            (transient-quit-all)
+                            (call-interactively #'sketch-transient))
+                          'face (list
+                                 :background (alist-get color shr-color-html-colors-alist nil nil 'string=)))
+      (setq counter (1+ counter))
+      (if (not (= counter 4))
+          (insert " ")
+        (insert "\n\n")
+        (setq counter 0)))))
 
 (defun sketch-toolbar-widths ()
-  (let* ((widths 12)
-         (button-width 40)
-         (button-height 20)
-         (outer-margin 5)
-         (toolbar-width (+ (* widths (+ button-width outer-margin))
-                           outer-margin))
-         (toolbar-height (+ button-height (* 2 outer-margin)))
-         (widths-toolbar (svg-create toolbar-width
-                                     toolbar-height))
-         (margin 8)
-         (font-size 5))
-    (svg-rectangle widths-toolbar
-                   0
-                   0
-                   toolbar-width
-                   toolbar-height
-                   :stroke "none"
-                   :fill "white"
-                   )
-    (let ((button-start (/ outer-margin 2))
-          hotspots)
+  (insert "STROKE WIDTH: ")
+  (insert (number-to-string sketch-stroke-width))
+  (insert "\n")
+  (let* ((widths 9)
+         (button-width (+ (* 4 (default-font-width)) 3))
+         (button-height (default-font-height))
+         (stroke-height (/ button-height 2)))
+    (let ((counter 0))
       (dotimes (w widths)
-        (svg-text widths-toolbar (prin1-to-string (1+ w))
-                  :stroke "black"
-                  :fill "black"
-                  :x (+ button-start margin)
-                  :y (+ font-size margin))
-        (svg-line widths-toolbar
-                  (+ button-start margin)
-                  22
-                  (+ button-start (- button-width margin))
-                  22
-                  :stroke "black"
-                  :stroke-width (1+ w))
-        (when (= (1+ w) sketch-stroke-width)
-          (svg-rectangle widths-toolbar
-                         button-start
-                         0
-                         button-width
-                         (+ button-height (* 2 outer-margin))
-                         :stroke "black"
-                         :fill "none"))
-        (push `((rect . ((,button-start . 0) . (,(+ button-start button-width) . ,toolbar-height)))
-                ,(intern (format "w%s" (1+ w)))
-                (pointer arrow))
-              hotspots)
-        (setq button-start (+ button-start (+ button-width outer-margin))))
-      (insert "STROKE WIDTH: ")
-      (sketch-insert-image widths-toolbar
-                           nil
-                           :map hotspots))))
-
-(defun sketch-mouse-set-stroke-width (e)
-  (interactive "e")
-  (setq sketch-stroke-width (string-to-number (substring (symbol-name (posn-area (event-start e))) 1)))
-  (sketch-redraw)
-  (transient-quit-all)
-  (sketch-transient))
+        (insert-text-button (format "%s" (1+ w))
+                            'action
+                            (lambda (button) (interactive)
+                              (setq sketch-stroke-width (string-to-number (button-label button)))
+                              (sketch-toolbar-refresh)
+                              (transient-quit-all)
+                              (call-interactively #'sketch-transient))
+                            'display (svg-image (let ((svg (svg-create button-width button-height)))
+                                                  (svg-rectangle svg 0 0 button-width button-height
+                                                                 :fill "white")
+                                                  (svg-line svg 5 stroke-height (- button-width 5) stroke-height
+                                                            :stroke "black" :stroke-width (1+ w))
+                                                  svg)))
+        (setq counter (1+ counter))
+        (if (not (= counter 3))
+            (insert " ")
+          (insert "\n\n")
+          (setq counter 0))))))
 
 ;; minor-mode
 (define-minor-mode sketch-mode
@@ -463,19 +453,7 @@ transient."
   :keymap
   `(
     ([sketch down-mouse-1] . sketch-interactively-1)
-    ([sketch double-mouse-1] . sketch-text-interactively)
-    ([w1 mouse-1] . sketch-mouse-set-stroke-width)
-    ([w2 mouse-1] . sketch-mouse-set-stroke-width)
-    ([w3 mouse-1] . sketch-mouse-set-stroke-width)
-    ([w4 mouse-1] . sketch-mouse-set-stroke-width)
-    ([w5 mouse-1] . sketch-mouse-set-stroke-width)
-    ([w6 mouse-1] . sketch-mouse-set-stroke-width)
-    ([w7 mouse-1] . sketch-mouse-set-stroke-width)
-    ([w8 mouse-1] . sketch-mouse-set-stroke-width)
-    ([w9 mouse-1] . sketch-mouse-set-stroke-width)
-    ([w10 mouse-1] . sketch-mouse-set-stroke-width)
-    ([w11 mouse-1] . sketch-mouse-set-stroke-width)
-    ([w12 mouse-1] . sketch-mouse-set-stroke-width)
+    ([sketch mouse-3] . sketch-text-interactively)
     ;; ([C-S-drag-mouse-1] . sketch-interactively)
     (,(kbd "C-c C-s") . sketch-transient))
   (if (boundp 'undo-tree-mode)
@@ -529,11 +507,6 @@ VEC should be a cons or a list containing only number elements."
 (defvar-local show-layers nil)
 (defvar-local sketch-cursor-position nil)
 
-(defvar sketch-object 'line)
-(defvar sketch-stroke-color "black")
-(defvar sketch-fill-color "none")
-(defvar sketch-stroke-width 1)
-(defvar sketch-stroke-dasharray nil)
 
 (defun sketch--create-canvas (width height &optional grid-parameter)
   "Create canvas of size WIDTH x HEIGHT for drawing svg.
@@ -573,10 +546,8 @@ Optionally set a custom GRID-PARAMETER (default is value of
                                                                                                    (- (car coords) sketch-im-x-offset)
                                                                                                    (+ (cdr coords) sketch-im-y-offset))))
 								                                            (force-mode-line-update))))))
-    (sketch-toolbar-colors)
-    (insert "\n\n")
-    (sketch-toolbar-widths)
-    (goto-char (point-min))))
+    (goto-char (point-min))
+    (sketch-toggle-toolbar)))
 
 ;; FIXME: `defvar' can't be meaningfully inside a function like that.
 ;; FIXME: Use a `sketch-' prefix for all dynbound vars.
@@ -676,7 +647,7 @@ else return nil"
   (funcall (oref obj set-value)
            (oref obj variable)
            (oset obj value value))
-  (sketch-redraw)
+  (sketch-toolbar-refresh)
   (transient--redisplay))
 
 (cl-defmethod transient-format-description ((obj sketch-lisp-variable:option))
@@ -840,7 +811,7 @@ else return nil"
     ("A" "Add layer" sketch-add-layer)]]
   ["Commands"
    [([sketch down-mouse-1] "Draw object"  sketch-interactively-1)
-    ([sketch double-mouse-1] "Draw text"  sketch-text-interactively)
+    ([sketch mouse-1] "Draw text"  sketch-text-interactively)
     ([sketch C-S-drag-mouse-1] "Crop image" sketch-crop)
     ;; ("T" "Polyline" test-mouse)
     ;; ([sketch S-down-mouse-1] "Track mouse" sketch-line)
@@ -1128,9 +1099,6 @@ else return nil"
                                                                                                    (- (car coords) sketch-im-x-offset)
                                                                                                    (+ (cdr coords) sketch-im-y-offset))))
 								                                            (force-mode-line-update))))))
-    (sketch-toolbar-colors)
-    (insert "\n\n")
-    (sketch-toolbar-widths)
     (goto-char (point-min))))
 ;; (beginning-of-line)))
 
@@ -1407,7 +1375,7 @@ else return nil"
   (setq sketch-svg (read (buffer-string)))
   (setq sketch-root (car (dom-by-id sketch-svg "root")))
   (setq sketch-layers-list (dom-elements sketch-root 'id "layer"))
-  (unless sketch-layers-list (sketch-add-layer)))
+  (unless sketch-layers-list (call-interactively #'sketch-add-layer)))
 ;; (let ((sketch-reverse (nreverse sketch-root)))
 ;;   (push (pop sketch-reverse) sketch-undo-redo)
 ;;   (setq sketch-root (nreverse sketch-reverse)))
@@ -1422,7 +1390,7 @@ else return nil"
         (t (user-error "This command requires `undo-tree' or `evil' to be available")))
   (setq sketch-root (read (buffer-string)))
   (setq sketch-layers-list (dom-elements sketch-root 'id "layer"))
-  (unless sketch-layers-list (sketch-add-layer)))
+  (unless sketch-layers-list (call-interactively #'sketch-add-layer)))
 ;; (let ((sketch-reverse (nreverse sketch-root)))
 ;;   (push (pop sketch-undo-redo) sketch-reverse)
 ;;   (setq sketch-root (nreverse sketch-reverse)))
