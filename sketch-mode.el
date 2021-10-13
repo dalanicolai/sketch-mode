@@ -264,43 +264,195 @@ as backgrounds."
                   (lambda (color-name)
                     (let ((color (copy-sequence color-name)))
                       (propertize color 'face
-		                                (list :foreground (readable-foreground-color color-name)
-                                          :background color))))
+		                              (list :foreground (readable-foreground-color color-name)
+                                        :background color))))
                   (mapcar #'car (sketch-colors-sort shr-color-html-colors-alist))))
-	 (color (completing-read
-		 (or prompt "Color (name or #RGB triplet): ")
-		 ;; Completing function for reading colors, accepting
-		 ;; both color names and RGB triplets.
-		 (lambda (string pred flag)
-		   (cond
-		    ((null flag)        ; Try completion.
-		     (or (try-completion string colors pred)
-			 (if (color-defined-p string)
-			     string)))
-		    ((eq flag t)        ; List all completions.
-		     (or (all-completions string colors pred)
-			 (if (color-defined-p string)
-			     (list string))))
-		    ((eq flag 'lambda)  ; Test completion.
-		     (or (member string colors)
-			 (color-defined-p string)))))
-		 nil t)))
+	       (color (completing-read
+		             (or prompt "Color (name or #RGB triplet): ")
+		             ;; Completing function for reading colors, accepting
+		             ;; both color names and RGB triplets.
+		             (lambda (string pred flag)
+		               (cond
+		                ((null flag)        ; Try completion.
+		                 (or (try-completion string colors pred)
+			                   (if (color-defined-p string)
+			                       string)))
+		                ((eq flag t)        ; List all completions.
+		                 (or (all-completions string colors pred)
+			                   (if (color-defined-p string)
+			                       (list string))))
+		                ((eq flag 'lambda)  ; Test completion.
+		                 (or (member string colors)
+			                   (color-defined-p string)))))
+		             nil t)))
 
     ;; Process named colors.
     (when (member color colors)
       (cond ((string-equal color "foreground at point")
-	     (setq color (foreground-color-at-point)))
-	    ((string-equal color "background at point")
-	     (setq color (background-color-at-point))))
+	           (setq color (foreground-color-at-point)))
+	          ((string-equal color "background at point")
+	           (setq color (background-color-at-point))))
       (when (and convert-to-RGB
-		 (not (string-equal color "")))
-	(let ((components (x-color-values color)))
-	  (unless (string-match-p "^#\\(?:[[:xdigit:]][[:xdigit:]][[:xdigit:]]\\)+$" color)
-	    (setq color (format "#%04X%04X%04X"
-				(logand 65535 (nth 0 components))
-				(logand 65535 (nth 1 components))
-				(logand 65535 (nth 2 components))))))))
+		             (not (string-equal color "")))
+	      (let ((components (x-color-values color)))
+	        (unless (string-match-p "^#\\(?:[[:xdigit:]][[:xdigit:]][[:xdigit:]]\\)+$" color)
+	          (setq color (format "#%04X%04X%04X"
+				                        (logand 65535 (nth 0 components))
+				                        (logand 65535 (nth 1 components))
+				                        (logand 65535 (nth 2 components))))))))
     color))
+
+(setq sketch-colors-basic '("White" "Silver" "Gray" "Black"
+                            "Red" "Maroon" "Yellow" "Olive"
+                            "Lime" "Green" "Aqua" "Teal"
+                            "Blue" "Navy" "Fuchsia" "Purple"))
+
+(setq color-name-hex-alist
+      (mapcar (lambda (c) (cons c (apply #'color-rgb-to-hex (color-name-to-rgb c))))
+              (defined-colors)))
+
+(defun sketch-color-lightness (color-name)
+  (let* ((rgb (color-name-to-rgb color-name))
+         (hsl (apply #'color-rgb-to-hsl rgb)))
+    (nth 2 hsl)))
+
+(defun sketch-colors-rgb-to-name (rgb)
+  (let ((hex (apply #'color-rgb-to-hex rgb)))
+    (car (rassoc hex color-name-hex-alist))))
+
+(setq sketch-colors-basic-alist (mapcar (lambda (c)
+                                          (assoc c shr-color-html-colors-alist 'string=))
+                                        sketch-colors-basic))
+
+(defun sketch-toolbar-colors ()
+  (goto-char (point-max))
+  (insert "\n\n")
+  (insert (propertize "STROKE COLOR: "))
+  (dolist (color sketch-colors-basic)
+    (insert-text-button
+     ;; (if (string= color sketch-stroke-color)
+     ;;                        " O "
+     "   "
+     ;; )
+     'action (lambda (button) (interactive)
+               (setq sketch-stroke-color (car (rassoc (plist-get (button-get button 'face) :background) shr-color-html-colors-alist)))
+               (sketch-redraw)
+               (transient-quit-all)
+               (sketch-transient))
+     'face (list
+            ;; :foreground (cond ((sketch-colors-rgb-to-name (color-complement color)))
+            ;;                   ((<= (sketch-color-lightness color) 0.5)
+            ;;                    "white")
+            ;;                   (t
+            ;;                    "black"))
+            :background  (alist-get color shr-color-html-colors-alist nil nil 'string=)))
+    (insert " "))
+  (insert-text-button "none"
+                      'action (lambda (button) (interactive)
+                                (setq sketch-stroke-color "none")
+                                (sketch-redraw)))
+  (insert ": ")
+  (insert-text-button "   "
+                      'action (lambda (button) (interactive)
+                                (setq sketch-stroke-color (plist-get (button-get button 'face) :background))
+                                (sketch-redraw))
+                      'face (list :background (alist-get sketch-stroke-color shr-color-html-colors-alist nil nil 'string=)))
+  (insert " ")
+  (insert sketch-stroke-color)
+  (insert "\n\n")
+  (insert (propertize "FILL COLOR:   " ))
+  (dolist (color sketch-colors-basic)
+    (insert-text-button
+     ;; (if (string= color sketch-fill-color)
+     ;;     " O "
+     "   "
+     ;; )
+     'action (lambda (button) (interactive)
+               (setq sketch-fill-color (car (rassoc (plist-get (button-get button 'face) :background) shr-color-html-colors-alist)))
+               (sketch-redraw)
+               (transient-quit-all)
+               (sketch-transient))
+     'face (list
+            ;; :foreground (cond ((sketch-colors-rgb-to-name (color-complement color)))
+            ;;                   ((<= (sketch-color-lightness color) 0.5)
+            ;;                    "white")
+            ;;                   (t
+            ;;                    "black"))
+            :background  (alist-get color shr-color-html-colors-alist nil nil 'string=)))
+    (insert " "))
+  (insert-text-button "none"
+                      'action (lambda (button) (interactive)
+                                (setq sketch-fill-color "none")
+                                (sketch-redraw)))
+  (insert ": ")
+  (insert-text-button "   "
+                      'action (lambda (button)
+                                (interactive)
+                                (setq sketch-stroke-color (plist-get (button-get button 'face) :background))
+                                (sketch-redraw))
+                      'face (list :background sketch-fill-color))
+  (insert " ")
+  (insert sketch-fill-color))
+
+(defun sketch-toolbar-widths ()
+  (let* ((widths 12)
+         (button-width 40)
+         (button-height 20)
+         (outer-margin 5)
+         (toolbar-width (+ (* widths (+ button-width outer-margin))
+                           outer-margin))
+         (toolbar-height (+ button-height (* 2 outer-margin)))
+         (widths-toolbar (svg-create toolbar-width
+                                     toolbar-height))
+         (margin 8)
+         (font-size 5))
+    (svg-rectangle widths-toolbar
+                   0
+                   0
+                   toolbar-width
+                   toolbar-height
+                   :stroke "none"
+                   :fill "white"
+                   )
+    (let ((button-start (/ outer-margin 2))
+          hotspots)
+      (dotimes (w widths)
+        (svg-text widths-toolbar (prin1-to-string (1+ w))
+                  :stroke "black"
+                  :fill "black"
+                  :x (+ button-start margin)
+                  :y (+ font-size margin))
+        (svg-line widths-toolbar
+                  (+ button-start margin)
+                  22
+                  (+ button-start (- button-width margin))
+                  22
+                  :stroke "black"
+                  :stroke-width (1+ w))
+        (when (= (1+ w) sketch-stroke-width)
+          (svg-rectangle widths-toolbar
+                         button-start
+                         0
+                         button-width
+                         (+ button-height (* 2 outer-margin))
+                         :stroke "black"
+                         :fill "none"))
+        (push `((rect . ((,button-start . 0) . (,(+ button-start button-width) . ,toolbar-height)))
+                ,(intern (format "w%s" (1+ w)))
+                (pointer arrow))
+              hotspots)
+        (setq button-start (+ button-start (+ button-width outer-margin))))
+      (insert "STROKE WIDTH: ")
+      (sketch-insert-image widths-toolbar
+                           nil
+                           :map hotspots))))
+
+(defun sketch-mouse-set-stroke-width (e)
+  (interactive "e")
+  (setq sketch-stroke-width (string-to-number (substring (symbol-name (posn-area (event-start e))) 1)))
+  (sketch-redraw)
+  (transient-quit-all)
+  (sketch-transient))
 
 ;; minor-mode
 (define-minor-mode sketch-mode
@@ -310,13 +462,26 @@ transient."
   :lighter "sketch-mode"
   :keymap
   `(
-    ;; ([sketch drag-mouse-1] . sketch-interactively)
+    ([sketch down-mouse-1] . sketch-interactively-1)
+    ([w1 mouse-1] . sketch-mouse-set-stroke-width)
+    ([w2 mouse-1] . sketch-mouse-set-stroke-width)
+    ([w3 mouse-1] . sketch-mouse-set-stroke-width)
+    ([w4 mouse-1] . sketch-mouse-set-stroke-width)
+    ([w5 mouse-1] . sketch-mouse-set-stroke-width)
+    ([w6 mouse-1] . sketch-mouse-set-stroke-width)
+    ([w7 mouse-1] . sketch-mouse-set-stroke-width)
+    ([w8 mouse-1] . sketch-mouse-set-stroke-width)
+    ([w9 mouse-1] . sketch-mouse-set-stroke-width)
+    ([w10 mouse-1] . sketch-mouse-set-stroke-width)
+    ([w11 mouse-1] . sketch-mouse-set-stroke-width)
+    ([w12 mouse-1] . sketch-mouse-set-stroke-width)
     ;; ([C-S-drag-mouse-1] . sketch-interactively)
     (,(kbd "C-c C-s") . sketch-transient))
   (if (boundp 'undo-tree-mode)
       (undo-tree-mode)
-    (buffer-enable-undo)
-    (blink-cursor-mode 0)))
+    (buffer-enable-undo))
+  (setq-local global-hl-line-mode nil)
+  (blink-cursor-mode 0))
 
 (defun sketch-mapcons (fn &rest cons-cells)
   "Apply FN to list of car's and cdr's of CONS-CELLS.
@@ -363,6 +528,12 @@ VEC should be a cons or a list containing only number elements."
 (defvar-local show-layers nil)
 (defvar-local sketch-cursor-position nil)
 
+(defvar sketch-object "line")
+(defvar sketch-stroke-color "black")
+(defvar sketch-fill-color "none")
+(defvar sketch-stroke-width 1)
+(defvar sketch-stroke-dasharray nil)
+
 (defun sketch--create-canvas (width height &optional grid-parameter)
   "Create canvas of size WIDTH x HEIGHT for drawing svg.
 Optionally set a custom GRID-PARAMETER (default is value of
@@ -389,20 +560,22 @@ Optionally set a custom GRID-PARAMETER (default is value of
     (setq show-layers '(0))
     (sketch-insert-image sketch-svg
                          (prin1-to-string sketch-root)
-                                :grid-param grid-parameter
-                                :pointer 'arrow
-                                :map `(((rect . ((0 . 0) . (,(dom-attr sketch-svg 'width) . ,(dom-attr sketch-svg 'height))))
-                                        ;; :map '(((rect . ((0 . 0) . (800 . 600)))
-                                        sketch
-                                        (pointer arrow help-echo (lambda (_ _ pos)
-                                                                   (let (
-                                                                         ;; (message-log-max nil)
-                                                                         (coords (cdr (mouse-pixel-position))))
-                                                                     (setq sketch-cursor-position (format "(%s, %s)"
-                                                                                                          (- (car coords) sketch-im-x-offset)
-                                                                                                          (+ (cdr coords) sketch-im-y-offset))))
-								                                                   (force-mode-line-update))))))
-    (backward-char)))
+                         :grid-param grid-parameter
+                         :map `(((rect . ((0 . 0) . (,(dom-attr sketch-svg 'width) . ,(dom-attr sketch-svg 'height))))
+                                 ;; :map '(((rect . ((0 . 0) . (800 . 600)))
+                                 sketch
+                                 (pointer arrow help-echo (lambda (_ _ pos)
+                                                            (let (
+                                                                  ;; (message-log-max nil)
+                                                                  (coords (cdr (mouse-pixel-position))))
+                                                              (setq sketch-cursor-position (format "(%s, %s)"
+                                                                                                   (- (car coords) sketch-im-x-offset)
+                                                                                                   (+ (cdr coords) sketch-im-y-offset))))
+								                                            (force-mode-line-update))))))
+    (sketch-toolbar-colors)
+    (insert "\n\n")
+    (sketch-toolbar-widths)
+    (goto-char (point-min))))
 
 ;; FIXME: `defvar' can't be meaningfully inside a function like that.
 ;; FIXME: Use a `sketch-' prefix for all dynbound vars.
@@ -487,39 +660,88 @@ else return nil"
                             'transient-value))))))
      (propertize "]" 'face 'transient-inactive-value))))
 
-(defclass sketch-variable:colors (transient-variable)
-  ((fallback    :initarg :fallback    :initform nil)
+(defclass sketch-lisp-variable:option (transient-variable)
+  ((set-value :initarg :set-value :initform #'set)
+   (always-read :initform t)
+   (fallback    :initarg :fallback    :initform nil)
    (default     :initarg :default     :initform nil)))
 
-(cl-defmethod transient-infix-read ((_obj sketch-variable:colors))
-  (read-color-web "Select color: "))
+(cl-defmethod transient-init-value ((obj sketch-lisp-variable:option))
+  (oset obj value (symbol-value (oref obj variable))))
 
-(cl-defmethod transient-infix-value ((obj sketch-variable:colors))
-  (let ((default (oref obj default)))
-    (if-let ((value (oref obj value)))
-        (concat (oref obj argument) (substring-no-properties value))
-      (when default
-        (concat (oref obj argument) (substring-no-properties default))))))
+(cl-defmethod transient-infix-set ((obj sketch-lisp-variable:option) value)
+  (funcall (oref obj set-value)
+           (oref obj variable)
+           (oset obj value value))
+  (sketch-redraw)
+  (transient--redisplay))
 
-;; We always call the autoloaded `color-name-to-rgb' before calling this
-;; function, so we know it's available even tho the compiler doesn't.
-(declare-function color-rgb-to-hex "color"
-                  (red green blue &optional digits-per-component))
+(cl-defmethod transient-format-description ((obj sketch-lisp-variable:option))
+  (or (oref obj description)
+      (symbol-name (oref obj variable))))
 
-(cl-defmethod transient-format-value ((obj sketch-variable:colors))
-  (let ((value (oref obj value))
-        (default  (oref obj default)))
-    (if value
-        (format "%s (%s)"
-                (propertize value 'face (cons 'foreground-color value))
-                (propertize (apply #'color-rgb-to-hex (color-name-to-rgb value))
-                            'face 'transient-inactive-argument))
-      (if (string= default "none")
-          (propertize "none" 'face 'transient-inactive-argument)
-        (format "%s (%s)"
-                (propertize default 'face (cons 'foreground-color default))
-                (propertize (apply #'color-rgb-to-hex (color-name-to-rgb default))
-                            'face 'transient-inactive-argument))))))
+(cl-defmethod transient-format-value ((obj sketch-lisp-variable:option))
+  (propertize (prin1-to-string (oref obj value))
+              'face 'transient-value))
+
+(defclass sketch-lisp-variable:colors (sketch-lisp-variable:option)
+  ())
+
+;; (cl-defmethod transient-infix-read ((obj sketch-lisp-variable:colors))
+;;   (let ((choices (oref obj choices))
+;;         (value (oref obj value)))
+;;     (or (cadr (member value choices)) (car choices))))
+
+(cl-defmethod transient-infix-read ((_obj sketch-lisp-variable:colors))
+  (substring-no-properties (read-color-web "Select color: ")))
+
+(cl-defmethod transient-format-value ((obj sketch-lisp-variable:colors))
+  (propertize (oref obj value)
+              'face 'transient-value))
+
+(defclass sketch-lisp-variable:widths (sketch-lisp-variable:option)
+  ())
+
+(cl-defmethod transient-infix-read ((obj sketch-lisp-variable:widths))
+  (let ((choices (oref obj choices)))
+    (string-to-number (completing-read "Enter width (float also allowed): " choices))))
+
+;; (value (oref obj value)))
+;; (or (cadr (member value choices)) (car choices))))
+
+;; (defclass sketch-variable:colors (transient-lisp-variable)
+;;   ((fallback    :initarg :fallback    :initform nil)
+;;    (default     :initarg :default     :initform nil)))
+
+;; (cl-defmethod transient-infix-read ((_obj sketch-variable:colors))
+;;   (read-color-web "Select color: "))
+
+;; ;; (cl-defmethod transient-infix-value ((obj sketch-variable:colors))
+;; ;;   (let ((default (oref obj default)))
+;; ;;     (if-let ((value (oref obj value)))
+;; ;;         (concat (oref obj argument) (substring-no-properties value))
+;; ;;       (when default
+;; ;;         (concat (oref obj argument) (substring-no-properties default))))))
+
+;; ;; We always call the autoloaded `color-name-to-rgb' before calling this
+;; ;; function, so we know it's available even tho the compiler doesn't.
+;; (declare-function color-rgb-to-hex "color"
+;;                   (red green blue &optional digits-per-component))
+
+;; (cl-defmethod transient-format-value ((obj sketch-variable:colors))
+;;   (let ((value (oref obj value))
+;;         (default  (oref obj default)))
+;;     (if value
+;;         (format "%s (%s)"
+;;                 (propertize value 'face (cons 'foreground-color value))
+;;                 (propertize (apply #'color-rgb-to-hex (color-name-to-rgb value))
+;;                             'face 'transient-inactive-argument))
+;;       (if (string= default "none")
+;;           (propertize "none" 'face 'transient-inactive-argument)
+;;         (format "%s (%s)"
+;;                 (propertize default 'face (cons 'foreground-color default))
+;;                 (propertize (apply #'color-rgb-to-hex (color-name-to-rgb default))
+;;                             'face 'transient-inactive-argument))))))
 
 ;; (let* ((args (when transient-current-prefix (transient-args 'sketch-transient)))
 ;;        (print event))))
@@ -612,20 +834,23 @@ else return nil"
 
 (transient-define-infix sketch-stroke-color ()
   :description "Option with list"
-  :class 'sketch-variable:colors
-  :argument "--stroke-color="
-  :default "black")
+  :class 'sketch-lisp-variable:colors
+  :variable 'sketch-stroke-color)
+;; :argument "--stroke-color="
+;; :default "black")
 
 (transient-define-infix sketch-fill-color ()
   :description "Option with list"
-  :class 'sketch-variable:colors
-  :argument "--fill-color="
-  :default "none")
+  :class 'sketch-lisp-variable:colors
+  :variable 'sketch-fill-color)
+;; :argument "--stroke-color="
+;; :argument "--fill-color="
+;; :default "none")
 
 (transient-define-infix sketch-stroke-width ()
   :description "Option with list"
-  :class 'transient-option
-  :argument "--stroke-width="
+  :class 'sketch-lisp-variable:widths
+  :variable 'sketch-stroke-width
   :choices (mapcar (lambda (x)
                      (number-to-string x))
                    (number-sequence 1 100)))
@@ -857,20 +1082,24 @@ else return nil"
     (erase-buffer) ;; a (not exact) alternative is to use (kill-backward-chars 1)
     (sketch-insert-image sketch-svg
                          (prin1-to-string sketch-root)
-                                :pointer 'arrow
-                                :grid-param sketch-grid-param
-                                :map `(((rect . ((0 . 0) . (,(dom-attr sketch-svg 'width) . ,(dom-attr sketch-svg 'height))))
-                                        ;; :map '(((rect . ((0 . 0) . (800 . 600)))
-                                        sketch
-                                        (pointer arrow help-echo (lambda (_ _ pos)
-                                                                   (let (
-                                                                         ;; (message-log-max nil)
-                                                                         (coords (cdr (mouse-pixel-position))))
-                                                                     (setq sketch-cursor-position (format "(%s, %s)"
-                                                                                                          (- (car coords) sketch-im-x-offset)
-                                                                                                          (+ (cdr coords) sketch-im-y-offset))))
-								                                                   (force-mode-line-update))))))
-    (backward-char)))
+                         :pointer 'arrow
+                         :grid-param sketch-grid-param
+                         :map `(((rect . ((0 . 0) . (,(dom-attr sketch-svg 'width) . ,(dom-attr sketch-svg 'height))))
+                                 ;; :map '(((rect . ((0 . 0) . (800 . 600)))
+                                 sketch
+                                 (pointer arrow help-echo (lambda (_ _ pos)
+                                                            (let (
+                                                                  ;; (message-log-max nil)
+                                                                  (coords (cdr (mouse-pixel-position))))
+                                                              (setq sketch-cursor-position (format "(%s, %s)"
+                                                                                                   (- (car coords) sketch-im-x-offset)
+                                                                                                   (+ (cdr coords) sketch-im-y-offset))))
+								                                            (force-mode-line-update))))))
+    (sketch-toolbar-colors)
+    (insert "\n\n")
+    (sketch-toolbar-widths)
+    (goto-char (point-min))))
+;; (beginning-of-line)))
 
 (defun sketch-update (&optional lisp lisp-buffer)
   (unless sketch-mode
@@ -894,12 +1123,12 @@ else return nil"
     (erase-buffer) ;; a (not exact) alternative is to use (kill-backward-chars 1)
     (sketch-insert-image sketch-svg
                          nil
-                                :pointer 'arrow
-                                :grid-param sketch-grid-param
-                                :map `(((rect . ((0 . 0) . (,(dom-attr sketch-svg 'width) . ,(dom-attr sketch-svg 'height))))
-                                        ;; :map '(((rect . ((0 . 0) . (800 . 600)))
-                                        sketch
-                                        (pointer arrow))))
+                         :pointer 'arrow
+                         :grid-param sketch-grid-param
+                         :map `(((rect . ((0 . 0) . (,(dom-attr sketch-svg 'width) . ,(dom-attr sketch-svg 'height))))
+                                 ;; :map '(((rect . ((0 . 0) . (800 . 600)))
+                                 sketch
+                                 (pointer arrow))))
     (backward-char)))
 
 
@@ -932,13 +1161,17 @@ else return nil"
                          (sketch--snap-to-grid (posn-object-x-y start) grid-param)))
          (points (list (cons (car start-coords) (cdr start-coords)))) ;; list of point needed for polyline/gon
          (object-props (list :stroke-width
-                             (transient-arg-value "--stroke-width=" args)
+                             sketch-stroke-width
+                             ;; (transient-arg-value "--stroke-width=" args)
                              :stroke
-                             (transient-arg-value "--stroke-color=" args)
+                             sketch-stroke-color
+                             ;; (transient-arg-value "--stroke-color=" args)
                              :fill
-                             (transient-arg-value "--fill-color=" args)
+                             sketch-fill-color
+                             ;; (transient-arg-value "--fill-color=" args)
                              :stroke-dasharray
-                             (transient-arg-value "--stroke-dasharray=" args)
+                             sketch-stroke-dasharray
+                             ;; (transient-arg-value "--stroke-dasharray=" args)
                              :marker-end (if args (pcase (transient-arg-value "--marker=" args)
                                                     ("arrow" "url(#arrow)")
                                                     ("dot" "url(#dot)")
@@ -946,8 +1179,7 @@ else return nil"
                                            (if sketch-include-end-marker
                                                "url(#arrow)"
                                              "none"))))
-         (object-type (transient-arg-value "--object=" args))
-         (start-command-and-coords (pcase object-type
+         (start-command-and-coords (pcase sketch-object
                                      ("line" (list 'svg-line
                                                    (car start-coords) (cdr start-coords)
                                                    (car start-coords) (cdr start-coords)))
@@ -961,32 +1193,32 @@ else return nil"
                                                   ((or "polyline" "freehand") 'svg-polyline)
                                                   ("polygon" 'svg-polygon))
                                                 points))))
-         (label (sketch-create-label object-type)))
+         (label (sketch-create-label sketch-object)))
     (apply (car start-command-and-coords)
            (nth sketch-active-layer sketch-layers-list)
            `(,@(cdr start-command-and-coords) ,@object-props :id ,label))
     (let ((node (car (dom-by-id (nth sketch-active-layer sketch-layers-list) label))))
-      (cond ((member object-type '("line" "rectangle" "circle" "ellipse"))
-        (track-mouse
-          (while (not (eq (car event) 'drag-mouse-1))
-            (setq event (read-event))
-            (let* ((end (event-start event))
-                   (end-coords (if (or (not snap) (string= snap "nil"))
-                                   (posn-object-x-y end)
-                                 (sketch--snap-to-grid (posn-object-x-y end) grid-param))))
-              (sketch-object-preview-update object-type node start-coords end-coords)
-              (sketch-update)
-              (setq sketch-cursor-position (format "(%s, %s)"
-                                                   (car end-coords)
-                                                   (cdr end-coords)))
-		          (force-mode-line-update))))
-        ;; (sketch-possibly-update-image sketch-svg)))
-        (let* ((end (event-end event))
-               (end-coords (if (or (not snap) (string= snap "nil"))
-                               (posn-object-x-y end)
-                             (sketch--snap-to-grid (posn-object-x-y end) grid-param))))
-          (sketch-object-preview-update object-type node start-coords end-coords)))
-            ((member object-type '("polyline" "polygon"))
+      (cond ((member sketch-object '("line" "rectangle" "circle" "ellipse"))
+             (track-mouse
+               (while (not (eq (car event) 'drag-mouse-1))
+                 (setq event (read-event))
+                 (let* ((end (event-start event))
+                        (end-coords (if (or (not snap) (string= snap "nil"))
+                                        (posn-object-x-y end)
+                                      (sketch--snap-to-grid (posn-object-x-y end) grid-param))))
+                   (sketch-object-preview-update sketch-object node start-coords end-coords)
+                   (sketch-update)
+                   (setq sketch-cursor-position (format "(%s, %s)"
+                                                        (car end-coords)
+                                                        (cdr end-coords)))
+		               (force-mode-line-update))))
+             ;; (sketch-possibly-update-image sketch-svg)))
+             (let* ((end (event-end event))
+                    (end-coords (if (or (not snap) (string= snap "nil"))
+                                    (posn-object-x-y end)
+                                  (sketch--snap-to-grid (posn-object-x-y end) grid-param))))
+               (sketch-object-preview-update sketch-object node start-coords end-coords)))
+            ((member sketch-object '("polyline" "polygon"))
              (track-mouse
                (while (not (eq (car event) 'double-mouse-1))
                  (setq event (read-event))
@@ -1018,7 +1250,7 @@ else return nil"
                                                                (push end-coords points)
                                                              (cons end-coords points)))
 			                                                    ", ")))))
-            ((string= object-type "freehand")
+            ((string= sketch-object "freehand")
              (track-mouse
                (while (not (eq (car event) 'drag-mouse-1))
                  (setq event (read-event))
@@ -1037,16 +1269,16 @@ else return nil"
                                                         (car end-coords)
                                                         (cdr end-coords)))
 		               (force-mode-line-update))))))
-               ;; (sketch-possibly-update-image sketch-svg)))
-        ;; (sketch-possibly-update-image sketch-svg
-        ;;                               :pointer 'arrow
-        ;;                               :map `(((rect . ((0 . 0) . (,(dom-attr sketch-svg 'width) . ,(dom-attr sketch-svg 'height))))
-        ;;                                       ;; :map '(((rect . ((0 . 0) . (800 . 600)))
-        ;;                                       sketch
-        ;;                                       (pointer arrow))))
+      ;; (sketch-possibly-update-image sketch-svg)))
+      ;; (sketch-possibly-update-image sketch-svg
+      ;;                               :pointer 'arrow
+      ;;                               :map `(((rect . ((0 . 0) . (,(dom-attr sketch-svg 'width) . ,(dom-attr sketch-svg 'height))))
+      ;;                                       ;; :map '(((rect . ((0 . 0) . (800 . 600)))
+      ;;                                       sketch
+      ;;                                       (pointer arrow))))
       (when-let (buf (get-buffer "*sketch-root*"))
         (sketch-update-lisp-window sketch-root buf))
-        (sketch-redraw))))
+      (sketch-redraw))))
 
 (transient-define-suffix sketch-remove-object ()
   (interactive)
