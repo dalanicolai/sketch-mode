@@ -1618,6 +1618,34 @@ then insert the image at the end"
                             (buffer-string)))
       (insert "\n#+END_IMAGE"))))
 
+(defun sketch-org-toggle-image ()
+  (let* ((context (org-element-lineage
+	                 (org-element-context)
+	                 ;; Limit to supported contexts.
+	                 '(babel-call clock dynamic-block footnote-definition
+			                          footnote-reference inline-babel-call inline-src-block
+			                          inlinetask item keyword node-property paragraph
+			                          plain-list planning property-drawer radio-target
+			                          src-block statistics-cookie table table-cell table-row
+			                          timestamp)
+	                 t))
+         (type (org-element-type context)))
+    (when (eq type 'paragraph)
+      (let ((parent (org-element-property :parent context)))
+        (when (eq (org-element-type parent) 'special-block)
+          (let* ((props (cadr parent))
+                 (beg (plist-get props :contents-begin))
+                 (end (plist-get props :contents-end)))
+            (if (get-char-property (point) 'display)
+                (remove-text-properties beg end '(display nil))
+              (let* ((xml (buffer-substring-no-properties beg end))
+                     (image (create-image xml 'svg t)))
+                (put-text-property beg (1- end) 'display image)
+                (goto-char beg)))))))))
+
+(add-hook 'org-ctrl-c-ctrl-c-final-hook 'sketch-org-toggle-image)
+
+
 ;;; Modify object
 
 (defun sketch-translate-object (buffer object-def props coords amount)
