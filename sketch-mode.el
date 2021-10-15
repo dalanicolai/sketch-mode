@@ -129,26 +129,11 @@ default: (800 . 600)."
 If non-nil then snap to grid."
   :type 'boolean)
 
-(defcustom sketch-include-start-marker nil
-  "Start marker type."
-  :type '(choice
-	        (const :tag "No marker" nil)
-	        (const :tag "Arrow" 'arrow)
-          (const :tag "Dot" 'dot)))
+(defvar sketch-start-marker "none")
 
-(defcustom sketch-include-mid-marker nil
-  "Mid marker type."
-  :type '(choice
-	        (const :tag "No marker" nil)
-	        (const :tag "Arrow" 'arrow)
-          (const :tag "Dot" 'dot)))
+(defvar sketch-mid-marker "none")
 
-(defcustom sketch-include-end-marker nil
-  "End marker type."
-  :type '(choice
-	        (const :tag "No marker" nil)
-	        (const :tag "Arrow" 'arrow)
-          (const :tag "Dot" 'dot)))
+(defvar sketch-end-marker "none")
 
 
 ;;; SVG-definitions
@@ -338,6 +323,7 @@ as backgrounds."
         (sketch-toolbar-refresh)))))
 
 (defun sketch-toolbar-colors ()
+  ;; STROKE COLOR
   (insert (propertize "STROKE COLOR\n"))
   (insert-text-button "   "
                        'action
@@ -376,8 +362,9 @@ as backgrounds."
         (insert "\n\n")
         (setq counter 0))))
 
-   (insert "\n\n")
+  (insert "\n\n")
 
+  ;; FILL COLOR
   (insert (propertize "FILL COLOR\n"))
   (insert-text-button "   "
                        'action
@@ -454,6 +441,7 @@ transient."
   `(
     ([sketch down-mouse-1] . sketch-interactively-1)
     ([sketch mouse-3] . sketch-text-interactively)
+    ([sketch S-down-mouse-1] . sketch-select)
     ;; ([C-S-drag-mouse-1] . sketch-interactively)
     (,(kbd "C-c C-s") . sketch-transient))
   (if (boundp 'undo-tree-mode)
@@ -462,28 +450,24 @@ transient."
   (setq-local global-hl-line-mode nil)
   (blink-cursor-mode 0))
 
-(defun sketch-mapcons (fn &rest cons-cells)
-  "Apply FN to list of car's and cdr's of CONS-CELLS.
-Return a single cons cell."
-  (cons (apply fn (mapcar #'car cons-cells))
-        (apply fn (mapcar #'cdr cons-cells))))
+;; (defun sketch-mapcons (fn &rest cons-cells)
+;;   "Apply FN to list of car's and cdr's of CONS-CELLS.
+;; Return a single cons cell."
+;;   (cons (apply fn (mapcar #'car cons-cells))
+;;         (apply fn (mapcar #'cdr cons-cells))))
 
 (defun sketch-norm (vec)
-  "Return norm of a vector.
+  "Return norm of a vector (list of numbers).
 VEC should be a cons or a list containing only number elements."
-  (let ((sum-of-squares (if (consp vec)
-                            (+ (expt (car vec) 2)
-                               (expt (cdr vec) 2))
-                          (apply #'+
-                                 (mapcar (lambda (x) (* x x))
-                                         vec)))))
-    (expt sum-of-squares (/ 1.0 (if (consp vec)
-                                    2
-                                  (length vec))))))
+  (let ((sum-of-squares (apply #'+
+                               (mapcar (lambda (x) (expt x 2))
+                                       vec))))
+    (expt sum-of-squares 0.5)))
 
 (defun sketch--circle-radius (start-coords end-coords)
   (sketch-norm
-   (sketch-mapcons #'- end-coords start-coords)))
+   (list (- (car end-coords) (car start-coords))
+         (- (cdr end-coords) (cdr start-coords)))))
 
 (defun sketch--rectangle-coords (start-coords end-coords)
   (let ((base-coords (cons (apply #'min (list (car start-coords) (car end-coords)))
@@ -500,7 +484,8 @@ VEC should be a cons or a list containing only number elements."
         (abs (/ (- (cdr end-coords) (cdr start-coords)) 2))))
 
 (defvar-local sketch-svg nil)
-(defvar-local svg-canvas nil)
+(defvar-local sketch-canvas nil)
+(defvar-local svg-background nil)
 (defvar-local sketch-grid nil)
 (defvar-local sketch-root nil)
 (defvar-local sketch-layers-list nil)
@@ -514,21 +499,23 @@ Optionally set a custom GRID-PARAMETER (default is value of
 `sketch-default-grid-parameter')."
   (let ((width width)
         (height height))
-    (setq svg-canvas (svg-create width height :stroke "gray"))
-    (svg-marker svg-canvas "arrow" 8 8 "black" t)
-    (svg-rectangle svg-canvas 0 0 width height :fill "white")
+    (setq sketch-canvas (svg-create width height :stroke "Black"))
+    (svg-marker sketch-canvas "arrow" 8 8 "black" t)
+    (svg-rectangle sketch-canvas 0 0 "100%" "100%" :fill "white")
     (setq sketch-grid (sketch-group "grid"))
     (let ((dash t))
       (dotimes (x (1- (/ width grid-parameter)))
         (let ((pos (* (1+ x) grid-parameter)))
-          (svg-line sketch-grid pos 0 pos height :stroke-dasharray (when dash "2,4"))
+          ;; (svg-line sketch-grid pos 0 pos height :stroke-dasharray (when dash "2,4"))
+          (svg-line sketch-grid pos 0 pos height :stroke-width (when dash 0.1))
           (setq dash (if dash nil t)))))
     (let ((dash t))
       (dotimes (x (1- (/ height grid-parameter)))
         (let ((pos (* (1+ x) grid-parameter)))
-          (svg-line sketch-grid 0 pos width pos :stroke-dasharray (when dash "2,4"))
+          ;; (svg-line sketch-grid 0 pos width pos :stroke-dasharray (when dash "2,4"))
+          (svg-line sketch-grid 0 pos width pos :stroke-width (when dash 0.1))
           (setq dash (if dash nil t)))))
-    (setq sketch-svg (append svg-canvas (when sketch-show-grid (list sketch-grid))))
+    (setq sketch-svg (append sketch-canvas (when sketch-show-grid (list sketch-grid))))
     (setq sketch-root (sketch-group "root"))
     (setq sketch-layers-list (list (sketch-group "layer-0")))
     (setq show-layers '(0))
@@ -552,7 +539,7 @@ Optionally set a custom GRID-PARAMETER (default is value of
 ;; FIXME: `defvar' can't be meaningfully inside a function like that.
 ;; FIXME: Use a `sketch-' prefix for all dynbound vars.
 (defvar-local sketch-elements nil)
-(defvar-local sketch-grid-param 25)
+(defvar-local sketch-grid-param 50)
 (defvar-local sketch-active-layer 0)
 (defvar-local sketch-call-buffer nil)
 
@@ -571,7 +558,7 @@ values"
             (height (if arg 600 (read-number "Enter height: "))))
         (switch-to-buffer (get-buffer-create "*sketch*"))
         (add-to-list 'mode-line-format '(:eval sketch-cursor-position) t)
-        (setq sketch-grid-param (if arg 25 (read-number "Enter grid parameter (enter 0 for no grid): ")))
+        (setq sketch-grid-param (if arg 50 (read-number "Enter grid parameter (enter 0 for no grid): ")))
         (sketch--create-canvas width height sketch-grid-param))
       (setq sketch-call-buffer call-buffer) ;; variable is buffer local
       (sketch-mode)
@@ -1079,7 +1066,7 @@ else return nil"
     (setq sketch-root (append (cl-subseq sketch-root 0 2) (list (nth (car show-layers) sketch-layers-list))))
     (dolist (layer (cdr show-layers))
       (setq sketch-root (append sketch-root (list (nth layer sketch-layers-list)))))
-    (setq sketch-svg (append svg-canvas
+    (setq sketch-svg (append sketch-canvas
                              (when sketch-show-grid (list sketch-grid))
                              (when sketch-show-labels (list (sketch-labels)))
                              (list sketch-root)))
@@ -1117,8 +1104,7 @@ else return nil"
     (setq sketch-root (append (cl-subseq sketch-root 0 2) (list (nth (car show-layers) sketch-layers-list))))
     (dolist (layer (cdr show-layers))
       (setq sketch-root (append sketch-root (list (nth layer sketch-layers-list)))))
-    (setq sketch-svg (append svg-canvas
-                             (when sketch-show-grid (list sketch-grid))
+    (setq sketch-svg (append sketch-canvas
                              (when sketch-show-labels (list (sketch-labels)))
                              (list sketch-root)))
     (erase-buffer) ;; a (not exact) alternative is to use (kill-backward-chars 1)
@@ -1526,9 +1512,9 @@ that should be added to the image. Initial value: (0)"
                        (sketch--snap-to-grid (posn-object-x-y end) grid-param)))
          (new-width (abs (- (car end-coords) (car start-coords))))
          (new-height (abs (- (cdr end-coords) (cdr start-coords)))))
-    (setq svg-canvas (svg-create new-width new-height :stroke "gray"))
-    (svg-marker svg-canvas "arrow" 8 8 "black" t)
-    (svg-rectangle svg-canvas 0 0 new-width new-height :fill "white")
+    (setq sketch-canvas (svg-create new-width new-height :stroke "gray"))
+    (svg-marker sketch-canvas "arrow" 8 8 "black" t)
+    (svg-rectangle sketch-canvas 0 0 new-width new-height :fill "white")
     (sketch--svg-translate (car start-coords) (cdr start-coords) sketch-root)
     (sketch-redraw)))
 
@@ -1850,7 +1836,7 @@ then insert the image at the end"
   ;; (setq sketch-root (append (cl-subseq sketch-root 0 2) (list (nth (car show-layers) svg-layers))))
   ;; (dolist (layer (cdr show-layers))
   ;;   (setq sketch-root (append sketch-root (list (nth layer svg-layers)))))
-  ;; (setq sketch-svg (append svg-canvas
+  ;; (setq sketch-svg (append sketch-canvas
   ;;                          (when sketch-show-grid (list sketch-grid))
   ;;                          (when sketch-show-labels (list (sketch-labels)))
   ;;                          (list sketch-root)))
@@ -1859,3 +1845,4 @@ then insert the image at the end"
 
 (provide 'sketch-mode)
 ;;; sketch-mode.el ends here
+
