@@ -492,36 +492,52 @@ VEC should be a cons or a list containing only number elements."
 (defvar-local show-layers nil)
 (defvar-local sketch-cursor-position nil)
 
+(defun sketch-create (w h &optional scale pan-x pan-y &rest args)
+  (let ((scale (or scale 1)))
+    (apply #'svg-create w h :viewBox (format "%s %s %s %s"
+                                             (or pan-x 0)
+                                             (or pan-y 0)
+                                             (/ (float w) scale)
+                                             (/ (float h) scale))
+           args)))
 
-(defun sketch--create-canvas (width height &optional grid-parameter)
-  "Create canvas of size WIDTH x HEIGHT for drawing svg.
-Optionally set a custom GRID-PARAMETER (default is value of
-`sketch-default-grid-parameter')."
-  (let ((width width)
-        (height height))
-    (setq sketch-canvas (svg-create width height :stroke "Black"))
-    (svg-marker sketch-canvas "arrow" 8 8 "black" t)
-    (svg-rectangle sketch-canvas 0 0 "100%" "100%" :fill "white")
-    (setq sketch-grid (sketch-group "grid"))
-    (let ((dash t))
-      (dotimes (x (1- (/ width grid-parameter)))
-        (let ((pos (* (1+ x) grid-parameter)))
-          ;; (svg-line sketch-grid pos 0 pos height :stroke-dasharray (when dash "2,4"))
-          (svg-line sketch-grid pos 0 pos height :stroke-width (when dash 0.1))
-          (setq dash (if dash nil t)))))
-    (let ((dash t))
-      (dotimes (x (1- (/ height grid-parameter)))
-        (let ((pos (* (1+ x) grid-parameter)))
-          ;; (svg-line sketch-grid 0 pos width pos :stroke-dasharray (when dash "2,4"))
-          (svg-line sketch-grid 0 pos width pos :stroke-width (when dash 0.1))
-          (setq dash (if dash nil t)))))
-    (setq sketch-svg (append sketch-canvas (when sketch-show-grid (list sketch-grid))))
+(defun sketch--create-canvas (width height &optional grid-param minor-grid-freq)
+  (setq sketch-grid-param (or grid-param 50))
+  (setq sketch-minor-grid-freq (or minor-grid-freq 4))
+  (let* (svg
+         (major-grid (dom-node 'pattern
+                               `((id . "grid")
+                                 (width . ,grid-param)
+                                 (height . ,grid-param)
+                                 (patternUnits . "userSpaceOnUse"))
+                               (dom-node 'rect `((width . ,grid-param) (height . ,grid-param)
+                                                 (x . 0) (y . 0)
+                                                 (stroke-width . 0.8) (stroke . "Gray")
+                                                 (fill . "url(#minorGrid)")))))
+         (minor-grid-param (/ (float grid-param) (or minor-grid-freq 4)))
+         (minor-grid (dom-node 'pattern
+                               `((id . "minorGrid")
+                                 (width . ,minor-grid-param)
+                                 (height . ,minor-grid-param)
+                                 (patternUnits . "userSpaceOnUse"))
+                               (dom-node 'rect `((width . ,minor-grid-param) (height . ,minor-grid-param)
+                                                 (x . 0) (y . 0)
+                                                 (stroke-width . 0.4) (stroke . "Gray")
+                                                 (fill . "White"))))))
+    ;; (when svg-background
+    (setq sketch-canvas (sketch-create width height nil nil nil :stroke "Black"))
+    (svg--def sketch-canvas minor-grid)
+    (svg--def sketch-canvas major-grid)
+    (svg-rectangle sketch-canvas 0 0 "100%" "100%" :fill "url(#grid)") ; sketch-background)
+    ;; (unless (memq "none" (list sketch-start-marker sketch-mid-marker sketch-end-marker))
+    ;;   (svg-marker sketch-canvas "arrow" 8 8 "black" t))
+    (setq sketch-svg sketch-canvas)
     (setq sketch-root (sketch-group "root"))
     (setq sketch-layers-list (list (sketch-group "layer-0")))
     (setq show-layers '(0))
     (sketch-insert-image sketch-svg
                          (prin1-to-string sketch-root)
-                         :grid-param grid-parameter
+                         :grid-param (/ sketch-grid-param (float sketch-minor-grid-freq))
                          :map `(((rect . ((0 . 0) . (,(dom-attr sketch-svg 'width) . ,(dom-attr sketch-svg 'height))))
                                  ;; :map '(((rect . ((0 . 0) . (800 . 600)))
                                  sketch
@@ -536,10 +552,12 @@ Optionally set a custom GRID-PARAMETER (default is value of
     (goto-char (point-min))
     (sketch-toggle-toolbar)))
 
+
 ;; FIXME: `defvar' can't be meaningfully inside a function like that.
 ;; FIXME: Use a `sketch-' prefix for all dynbound vars.
 (defvar-local sketch-elements nil)
 (defvar-local sketch-grid-param 50)
+(defvar-local sketch-minor-grid-freq 50)
 (defvar-local sketch-active-layer 0)
 (defvar-local sketch-call-buffer nil)
 
@@ -1074,7 +1092,7 @@ else return nil"
     (sketch-insert-image sketch-svg
                          (prin1-to-string sketch-root)
                          :pointer 'arrow
-                         :grid-param sketch-grid-param
+                         :grid-param (/ sketch-grid-param (float sketch-minor-grid-freq))
                          :map `(((rect . ((0 . 0) . (,(dom-attr sketch-svg 'width) . ,(dom-attr sketch-svg 'height))))
                                  ;; :map '(((rect . ((0 . 0) . (800 . 600)))
                                  sketch
@@ -1111,7 +1129,7 @@ else return nil"
     (sketch-insert-image sketch-svg
                          nil
                          :pointer 'arrow
-                         :grid-param sketch-grid-param
+                         :grid-param (/ sketch-grid-param (float sketch-minor-grid-freq))
                          :map `(((rect . ((0 . 0) . (,(dom-attr sketch-svg 'width) . ,(dom-attr sketch-svg 'height))))
                                  ;; :map '(((rect . ((0 . 0) . (800 . 600)))
                                  sketch
