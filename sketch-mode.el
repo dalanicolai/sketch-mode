@@ -564,7 +564,6 @@ VEC should be a cons or a list containing only number elements."
 
 ;; FIXME: `defvar' can't be meaningfully inside a function like that.
 ;; FIXME: Use a `sketch-' prefix for all dynbound vars.
-(defvar-local sketch-elements nil)
 (defvar-local sketch-grid-param 50)
 (defvar-local sketch-minor-grid-freq 50)
 (defvar-local sketch-active-layer 0)
@@ -924,6 +923,9 @@ else return nil"
   :default "nil")
 
 (defun sketch-labels ()
+  "Create svg-group with svg text nodes for all elements in layer.
+If value of variable ‘sketch-show-labels' is ‘layer', create 
+"
   (interactive)
   (let ((nodes (pcase sketch-show-labels
                  ("layer" (dom-children (nth sketch-active-layer sketch-layers-list)))
