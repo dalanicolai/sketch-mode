@@ -1084,7 +1084,7 @@ as backgrounds."
 
 (defun sketch-toolbar-colors ()
   ;; STROKE COLOR
-  (insert (propertize "STROKE COLOR: "))
+  (insert (propertize "STROKE COLOR\n"))
   (insert-text-button "   "
                       'action
                       (lambda (button) (interactive)
@@ -1118,17 +1118,15 @@ as backgrounds."
                           'face (list
                                  :background (alist-get color shr-color-html-colors-alist nil nil 'string=)))
       (setq counter (1+ counter))
-      (if (not (= counter 8))
+      (if (not (= counter 4))
           (insert " ")
         (insert "\n\n")
-      ;; (when (= counter 8)
-      ;;   (insert "\n")
         (setq counter 0))))
 
   (insert "\n")
 
   ;; FILL COLOR
-  (insert (propertize "FILL COLOR: "))
+  (insert (propertize "FILL COLOR\n"))
   (apply #'insert-text-button "   "
          'action
          (lambda (button) (interactive)
@@ -1163,7 +1161,7 @@ as backgrounds."
                           'face (list
                                  :background (alist-get color shr-color-html-colors-alist nil nil 'string=)))
       (setq counter (1+ counter))
-      (if (not (= counter 8))
+      (if (not (= counter 4))
           (insert " ")
         (insert "\n\n")
         (setq counter 0)))))
@@ -1172,7 +1170,7 @@ as backgrounds."
   (insert "STROKE WIDTH: ")
   (insert (number-to-string sketch-stroke-width))
   (insert "\n")
-  (let* ((widths )
+  (let* ((widths 9)
          (button-width (+ (* 4 (default-font-width)) 3))
          (button-height (default-font-height))
          (stroke-height (/ button-height 2)))
@@ -1193,7 +1191,7 @@ as backgrounds."
                                                             :stroke "black" :stroke-width (1+ w))
                                                   svg)))
         (setq counter (1+ counter))
-        (if (not (= counter 6))
+        (if (not (= counter 3))
             (insert " ")
           (insert "\n\n")
           (setq counter 0))))))
@@ -1202,66 +1200,61 @@ as backgrounds."
   (insert "MOUSE ACTION\n")
   (insert "draw\n")
   (let ((objects '(line polyline circle ellipse rectangle polygon)))
-    (let ((counter 0))
-      (while objects
-        (let ((o (car objects)))
-          (apply #'insert-text-button
-                 (symbol-name o)
-                 'action (lambda (button) (interactive)
-                           (setq sketch-action (intern (button-label button)))
-                           (sketch-toolbar-refresh))
-                 (when (eq o sketch-action)
-                   (list 'face 'custom-button-unraised)))
-          (setq counter (1+ counter))
-          (cond ((/= counter 4)
-                 (dotimes (_ (- 10 (length (symbol-name o))))
-                   (insert " ")))
-                ;; (let ((o (cadr objects)))
-                ;;   (apply #'insert-text-button
-                ;;          (symbol-name o)
-                ;;          'action (lambda (button) (interactive)
-                ;;                    (setq sketch-action (intern (button-label button)))
-                ;;                    (sketch-toolbar-refresh))
-                ;;          (when (eq o sketch-action)
-                ;;            (list 'face 'custom-button-unraised))))
-                ;; ;; (list 'face (if (eq o sketch-action)
-                ;; ;;                 'widget-button-pressed
-                ;; ;;               'widget-button)))
-                (t
-                 (insert "\n")
-                 (setq counter 0)))
-          (setq objects (cdr objects))))))
-  (apply #'insert-text-button
-         "freehand"
-         'action (lambda (button) (interactive)
-                   (setq sketch-action (intern (button-label button)))
-                   (sketch-toolbar-refresh))
-         (when (eq 'freehand sketch-action)
-           (list 'face 'custom-button-unraised)))
-  (insert "  ")
-  (apply #'insert-text-button
-         "text"
-         'action (lambda (button) (interactive)
-                   (setq sketch-action (intern (button-label button)))
-                   (sketch-toolbar-refresh))
-         (when (eq 'text sketch-action)
-           (list 'face 'custom-button-unraised)))
-  (insert "\n\n")
-  (insert "edit\n")
-  (dolist (e '(select move translate))
+    (while objects
+      (let ((o (car objects)))
+        (apply #'insert-text-button
+               (symbol-name o)
+               'action (lambda (button) (interactive)
+                         (setq sketch-action (intern (button-label button)))
+                         (sketch-toolbar-refresh))
+               (when (eq o sketch-action)
+                 (list 'face 'custom-button-unraised)))
+        (dotimes (_ (- 10 (length (symbol-name o))))
+          (insert " ")))
+      (let ((o (cadr objects)))
+        (apply #'insert-text-button
+               (symbol-name o)
+               'action (lambda (button) (interactive)
+                         (setq sketch-action (intern (button-label button)))
+                         (sketch-toolbar-refresh))
+               (when (eq o sketch-action)
+                 (list 'face 'custom-button-unraised))))
+      ;; (list 'face (if (eq o sketch-action)
+      ;;                 'widget-button-pressed
+      ;;               'widget-button)))
+      (insert "\n")
+      (setq objects (cddr objects)))
     (apply #'insert-text-button
-           (symbol-name e)
+           "freehand"
            'action (lambda (button) (interactive)
                      (setq sketch-action (intern (button-label button)))
                      (sketch-toolbar-refresh))
-           (when (eq e sketch-action)
+           (when (eq 'freehand sketch-action)
              (list 'face 'custom-button-unraised)))
-    (insert " ")
-    ))
+    (insert "  ")
+    (apply #'insert-text-button
+           "text"
+           'action (lambda (button) (interactive)
+                     (setq sketch-action (intern (button-label button)))
+                     (sketch-toolbar-refresh))
+           (when (eq 'text sketch-action)
+             (list 'face 'custom-button-unraised)))
+    (insert "\n\n")
+    (insert "edit\n")
+    (dolist (e '(select move translate))
+      (apply #'insert-text-button
+             (symbol-name e)
+             'action (lambda (button) (interactive)
+                       (setq sketch-action (intern (button-label button)))
+                       (sketch-toolbar-refresh))
+             (when (eq e sketch-action)
+               (list 'face 'custom-button-unraised)))
+      (insert " ")
+      )))
 
 (defun sketch-toolbar-toggles ()
   (insert "TOGGLES\n")
-  (insert "Grid: ")
+  (insert "Grid:   ")
   (apply #'insert-text-button (if sketch-show-grid "show" "hide")
                       'action
                       (lambda (button) (interactive)
@@ -1272,8 +1265,8 @@ as backgrounds."
                       ;; (list 'face (if sketch-grid
                       ;;                 'widget-button-pressed
                       ;;               'widget-button)))
-  (insert "   ")
-  (insert "Snap: ")
+  (insert "\n")
+  (insert "Snap:   ")
   (apply #'insert-text-button (if sketch-snap-to-grid "on" "off")
                       'action
                       (lambda (button) (interactive)
@@ -1281,7 +1274,7 @@ as backgrounds."
                         (sketch-toolbar-refresh))
                       (when sketch-snap-to-grid
                         (list 'face 'custom-button-unraised)))
-  (insert "   ")
+  (insert "\n")
   (insert "Labels: ")
   (apply #'insert-text-button (or sketch-show-labels "hide")
          'action
@@ -1420,8 +1413,8 @@ color."
                             'action
                             (lambda (_) (interactive)
                               (sketch-set-font))))
-  (insert"   ")
-  (insert "Size: ")
+  (insert"\n")
+  (insert "Size:   ")
   (insert-text-button (number-to-string sketch-font-size)
                       'action
                       (lambda (_) (interactive)
