@@ -423,6 +423,7 @@ If value of variable ‘sketch-show-labels' is ‘layer', create ..."
       (goto-char (point-min)))))
 
 
+;;;###autoload
 (defun sketch (arg)
   "Initialize or switch to (new) SVG image.
 With prefix ARG, create sketch using default (customizable)
