@@ -323,7 +323,7 @@ If value of variable ‘sketch-show-labels' is ‘layer', create ..."
   (when sketch-show-coords
     (force-mode-line-update)))
 
-(defun sketch-draw-insert-image (width height)
+(defun sketch-draw-insert-image ()
   (sketch-insert-image sketch-svg
                        (prin1-to-string sketch-root)
                        :map `(((rect . ((0 . 0) . (,(dom-attr sketch-svg 'width) . ,(dom-attr sketch-svg 'height))))
@@ -332,7 +332,7 @@ If value of variable ‘sketch-show-labels' is ‘layer', create ..."
                                ,(append '(pointer
                                           arrow)
                                         (when sketch-show-coords
-                                          (list 'help-echo (lambda (_ _ pos)
+                                          (list 'help-echo (lambda (_ _ _)
                                                              (let ((coords (cdr (mouse-pixel-position))))
                                                                (setq sketch-cursor-position
                                                                      (format "(%s, %s)"
@@ -341,7 +341,7 @@ If value of variable ‘sketch-show-labels' is ‘layer', create ..."
                                                              ;; (+ (cdr coords) sketch-im-y-offset))))
                                                              (force-mode-line-update)))))))))
 
-(defun sketch-update-insert-image (width height)
+(defun sketch-update-insert-image ()
   (sketch-insert-image sketch-svg
                        nil
                        ;; :pointer 'arrow
@@ -398,37 +398,34 @@ If value of variable ‘sketch-show-labels' is ‘layer', create ..."
   (with-current-buffer "*sketch*"
     (let ((inhibit-read-only t))
       (erase-buffer) ;; a (not exact) alternative is to use (kill-backward-chars 1)
-      (let ((w (car sketch-size))
-            (h (cdr sketch-size)))
         (if update
-            (sketch-update-insert-image w h)
-          (sketch-draw-insert-image w h))
-        (goto-char (point-min))))))
+            (sketch-update-insert-image)
+          (sketch-draw-insert-image))
+        (goto-char (point-min)))))
 
 (defun sketch--init (width height &optional grid-param minor-grid-freq)
   (setq sketch-grid-param (or grid-param sketch-grid-param))
   (setq sketch-minor-grid-freq (or minor-grid-freq sketch-minor-grid-freq))
-  (let* (svg)
-    ;; (when sketch-background
-    ;; (unless (memq "none" (list sketch-start-marker sketch-mid-marker sketch-end-marker))
-    ;;   (svg-marker sketch-canvas "arrow" 8 8 "black" t))
-    (sketch--create-canvas width height)
-    (setq sketch-svg (seq-copy sketch-canvas))
-    (when sketch-show-grid
-      (sketch-create-grid grid-param)
-      (svg--def sketch-svg (cdr sketch-grid))
-      (svg--def sketch-svg (car sketch-grid)))
-    (setq sketch-root (sketch-group "root"))
-    (setq sketch-layers-list (list (sketch-group "layer-0")))
-    (setq show-layers '(0))
-    (sketch-draw-insert-image width height)
-    (goto-char (point-min)) ; cursor over image looks better
-    (setq sketch-im-x-offset (car (window-absolute-pixel-position)))
-    (sketch-toggle-toolbar)
-    (when (featurep 'hydra) (hydra-sketch/body))
-    (add-hook 'kill-buffer-hook 'sketch-kill-toolbar nil t)
-    (special-mode)
-    (sketch-mode)))
+  ;; (when sketch-background
+  ;; (unless (memq "none" (list sketch-start-marker sketch-mid-marker sketch-end-marker))
+  ;;   (svg-marker sketch-canvas "arrow" 8 8 "black" t))
+  (sketch--create-canvas width height)
+  (setq sketch-svg (seq-copy sketch-canvas))
+  (when sketch-show-grid
+    (sketch-create-grid grid-param)
+    (svg--def sketch-svg (cdr sketch-grid))
+    (svg--def sketch-svg (car sketch-grid)))
+  (setq sketch-root (sketch-group "root"))
+  (setq sketch-layers-list (list (sketch-group "layer-0")))
+  (setq show-layers '(0))
+  (sketch-draw-insert-image)
+  (goto-char (point-min)) ; cursor over image looks better
+  (setq sketch-im-x-offset (car (window-absolute-pixel-position)))
+  (sketch-toggle-toolbar)
+  (when (featurep 'hydra) (hydra-sketch/body))
+  (add-hook 'kill-buffer-hook 'sketch-kill-toolbar nil t)
+  (special-mode)
+  (sketch-mode))
 ;; (evil-emacs-state)))
 
 (defun sketch (arg)
@@ -805,7 +802,7 @@ VEC should be a cons or a list containing only number elements."
 
 (defvar sketch-selection nil)
 
-(defun sketch-keyboard-select (&optional arg)
+(defun sketch-keyboard-select (&optional all)
   "Select labels to include in selection.
 Initial input shows current selection. With prefix ARG initial
 selection shows all object in sketch."
@@ -956,7 +953,7 @@ selection shows all object in sketch."
       (with-current-buffer buffer
         (emacs-lisp-mode))
       (setq sketch-lisp-buffer-name buffer))
-    (setq sketch-show-labels sketch-show-labels)
+    (setq sketch-show-labels show-labels)
     (sketch-toolbar-refresh)
     (sketch-redraw)))
 
@@ -1429,7 +1426,7 @@ then insert the image at the end"
   (insert (propertize "FILL COLOR: "))
   (apply #'insert-text-button "   "
          'action
-         (lambda (button) (interactive)
+         (lambda (_) (interactive)
            (print sketch-fill-color))
          (pcase sketch-fill-color
            ("none" nil)
@@ -1456,10 +1453,7 @@ then insert the image at the end"
                                   (car (rassoc
                                         (plist-get (button-get button 'face) :background)
                                         shr-color-html-colors-alist)))
-                            (sketch-toolbar-refresh)
-                            ;; (transient-quit-all)
-                            ;; (call-interactively #'sketch-transient)
-                            )
+                            (sketch-toolbar-refresh))
                           'face (list
                                  :background (alist-get color
                                                         shr-color-html-colors-alist
@@ -1570,7 +1564,7 @@ then insert the image at the end"
   (insert "Grid: ")
   (apply #'insert-text-button (if sketch-show-grid "show" "hide")
          'action
-         (lambda (button) (interactive)
+         (lambda (_) (interactive)
            (sketch-toggle-grid)
            (sketch-toolbar-refresh))
          (when sketch-show-grid
@@ -1582,7 +1576,7 @@ then insert the image at the end"
   (insert "Snap: ")
   (apply #'insert-text-button (if sketch-snap-to-grid "on" "off")
          'action
-         (lambda (button) (interactive)
+         (lambda (_) (interactive)
            (sketch-toggle-snap)
            (sketch-toolbar-refresh))
          (when sketch-snap-to-grid
@@ -1591,7 +1585,7 @@ then insert the image at the end"
   (insert "Labels: ")
   (apply #'insert-text-button (or sketch-show-labels "hide")
          'action
-         (lambda (button) (interactive)
+         (lambda (_) (interactive)
            (sketch-cycle-labels)
            (sketch-toolbar-refresh))
          (when sketch-show-labels
