@@ -30,16 +30,11 @@
      
 ** Incomplete features (merged into main)
    - Draw labels (not implemented for all type of objects. Easy to implement)
-   - Modify object (not, at all, fully implemented for all object. Easy to
-     implement).
      
      It would be handy to have a 'transform group' option also. [[https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/transform][SVG groups allow
      for easy transformations]]. Then it would probably be handy to wrap all
      objects in group tags.
 
-** Incomplete features (not merged into main)
-   - Implement layers (see/try out =implement-layers= branch)
-   
 ** Delicious low hanging fruit
    - use svg snippets (i.e. design object in external programs like inkscape,
      geogebra etc., end quickly insert them in your sketches)
@@ -95,24 +90,39 @@
   package, the usage is more or less self explanatory, it is wise to take note
   of the following comments:
 
-  - use =I= to quickly insert the xml-definition into the (org-mode) buffer from
-    which sketch-mode was called and create the image as an overlay.
-  - to remove an object (without using undo), you should toggle labels by
-    pressing =l=, and then to remove an object enter its label after pressing
-    =R=.
+  - use =C-c C-c= to quickly insert the xml-definition into the (org-mode)
+    buffer from which sketch-mode was called and create the image as an overlay.
+    The image will get inserted within a new =image= org block type. SVG/XML is
+    suitable for inserting directly in an org file so that you do not need to
+    store the image separately on disk (which is nice feature when sharing
+    files). The new block type is not yet 'officially supported' by org-mode, so
+    that it will not yet get exported as an image (HELP WANTED :nerd:), but the
+    image in the code block can be toggle with =C-c C-c=.
+  - Alternatively you can write the image to a file by pressing =S= (S-ave).
+  - Before you insert the image you can use =C-S mouse-drag= to crop the image.
+  - You can move an object by pressing =m= to open the 'modify-object' state.
+    This will select the object and activate the =translate= mouse action so
+    that you can drag the object using the mouse.
+  - to remove an object (without using undo), you should press =d=, and then the
+    label of the object you want removed.
   - You can also modify the drawing by changing the object definition (i.e.
     elisp). For that press =d= to open the definition in a side-window, then
     press =q= to hide (deactivate the) transient (keymap). Now modify the code
-    and press =C-c C=c=, to load it and update the =\*sketch\*= buffer. 
-  - After you've hidden the transient by pressing =q=, you can go back to
-    sketch mode via =M-x sketch= (or =C-c C-s= when still in the sketch-mode
-    buffer)
+    and press =C-c C=c=, to load it and update the =\*sketch\*= buffer.    
 
-  Create your sketch and then save
-  the file by pressing =S=.
+* Bugs
+  Currently when undoing all (drawing of) objects, sketch-mode gets confused and
+  further drawing is not possible anymore (although redoing is). This is
+  probably a very easy to solve bug, but has not been a priority yet.
 
+* Alternatives
+  [[https://lifeofpenguin.blogspot.com/2021/08/scribble-notes-in-gnu-emacs.html][canvas-mode]]: An even newer package is being created which provides some
+  additional features (although =sketch-mode= is still in development and most
+  probably will get most of these features too). Unfortunately, the package is
+  not (yet?) very compatible with =sketch-mode=.
+  
 * Sponsor the project
-  It takes me a lot of time to develop these packages, while, as we would say in
+  It takes me a lot of time to develop (this) package(s), while, as we would say in
   the Netherlands, I have no penny to scratch my butt. Therefore, although I am
   also really happy to offer it for free, if you find [[https://github.com/dalanicolai][my package(s)]] (real
   projects page in the making) useful (e.g. for you work), and if you can afford
