@@ -1,26 +1,44 @@
 #+TITLE: Sketch mode
 #+DESCRIPTION: Quickly create simple SVG sketches using the mouse
 
+* Prepreliminary comment
+  The initial version with the transient can be found in the 'transient-version'
+  branch. This version introduced a toolbar which made the transient
+  unnecessary. Also removing the transient frees up drawing space. It has been
+  replaced by a hydra which can togglable. Also an earlier version showed the
+  mouse coordinate position in the mode-line. However, this functionality
+  hinders the 'interactive' drawing (which might could be considered an emacs
+  bug). Anyway, you can toggle showing the coordinates by pressing =t c= (maybe
+  it works more fluently on your system).
+
 * Preliminary comment
-  This is a new package that is still in development. However, its main
-  functionality is very usable already. On the other hand, several (or most)
-  features are not implemented completely, simply because implementing these
-  things take time, and I should first focus on keeping myself alive:|. But if
-  you know some elisp, than it should be quite straightforward to complete the
-  implementation of those features. Any feedback, for example suggestions for
-  enhancing the interface/usability, is very welcome (probably best by opening
-  an issue). Also, any contributions are very welcome. The code of the package
-  is very accessible (especially if you quickly read how to use [[https://www.gnu.org/software/emacs/manual/html_node/elisp/Edebug.html][edebug]]).
+  This is a new package that is still in development. It has been on ELPA-devel
+  for a while now, but it did not yet attract any code contributors. However,
+  despite that the code and docs are far from polished/finished, its main
+  functionality is very usable already, so that it is probably a good time to
+  publish it on ELPA. On the other hand, several (or most) features are not
+  implemented completely, simply because implementing these things take time,
+  and I should first focus on keeping myself alive 😐. But if you know some
+  elisp, than it should be quite straightforward to complete the implementation
+  of those features (and create a PR). The idea is that elisp users can add
+  functionalities easily so that the package becomes ever more versatile. Users
+  can also contribute by creating SVG snippets (in a separate repo, or create a
+  PR). Any feedback, for example suggestions for enhancing the
+  interface/usability, is very welcome (probably best by opening an issue).
+  Also, any contributions are very welcome. The code of the package is very
+  accessible (especially if you quickly read how to use [[https://www.gnu.org/software/emacs/manual/html_node/elisp/Edebug.html][edebug]]).
 
   A list of ideas for implementation can be found in the preliminary comment in
   the =sketch.el= file and additionally in the [[https://github.com/dalanicolai/sketch-mode/wiki/vision][wiki]] section.
   
-  
 ** Included features
-   - snap to grid
+   - mnemonic shortcuts + hydra and (alternatively) a toolbar
+   - quickly insert image definition into new type (image) org-block (no
+     external file required)
+   - snap to grid (on minor-grid, however major and minor grid are fully
+     configurable)
    - draw text
    - crop finale image
-   - quickly insert image + definition into (org-mode) buffer
    - set stroke, fill, width etc.
    - show dom (lisp) in other window
    - draw angle arcs (between lines, available soon, I hope. See
