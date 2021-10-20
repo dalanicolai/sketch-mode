@@ -107,7 +107,10 @@
                                                                 (image-size
                                                                  (get-text-property (point-min) 'display) t)))
                                                         (frame-pixel-width)))))
-
+(defvar sketch-im-x-offset nil)
+(defvar sketch-cursor-position "")
+(defvar sketch-show-coords nil)
+(defvar sketch-coordless-mode-line-format nil)
 
 
 ;;; Some snippets for svg.el
@@ -357,23 +360,27 @@ If value of variable ‘sketch-show-labels' is ‘layer', create ..."
                                                  ,(when sketch-background
                                                     `(fill . ,sketch-background))))))))
 
+(defun sketch-maybe-update-modeline ()
+  (when sketch-show-coords
+    (force-mode-line-update)))
+
 (defun sketch-draw-insert-image (width height)
   (sketch-insert-image sketch-svg
                        (prin1-to-string sketch-root)
                        :map `(((rect . ((0 . 0) . (,(dom-attr sketch-svg 'width) . ,(dom-attr sketch-svg 'height))))
                                ;; :map '(((rect . ((0 . 0) . (800 . 600)))
                                sketch
-                               (pointer
-                                arrow)))))
-;; help-echo (lambda (_ _ pos)
-;;             (let (
-;;                   ;; (message-log-max nil)
-;;                   (coords (cdr (mouse-pixel-position))))
-;;               (setq sketch-cursor-position
-;;                     (format "(%s, %s)"
-;;                             (- (car coords) sketch-im-x-offset)
-;;                             (+ (cdr coords) sketch-im-y-offset))))
-;;                           (force-mode-line-update)))))))
+                               ,(append '(pointer
+                                          arrow)
+                                        (when sketch-show-coords
+                                          (list 'help-echo (lambda (_ _ pos)
+                                                             (let ((coords (cdr (mouse-pixel-position))))
+                                                               (setq sketch-cursor-position
+                                                                     (format "(%s, %s)"
+                                                                             (- (car coords) sketch-im-x-offset)
+                                                                             (cdr coords))))
+                                                             ;; (+ (cdr coords) sketch-im-y-offset))))
+                                                             (force-mode-line-update)))))))))
 
 (defun sketch-update-insert-image (width height)
   (sketch-insert-image sketch-svg
@@ -457,6 +464,7 @@ If value of variable ‘sketch-show-labels' is ‘layer', create ..."
     (setq show-layers '(0))
     (sketch-draw-insert-image width height)
     (goto-char (point-min)) ; cursor over image looks better
+    (setq sketch-im-x-offset (car (window-absolute-pixel-position)))
     (sketch-toggle-toolbar)
     (add-hook 'kill-buffer-hook 'sketch-kill-toolbar nil t)
     (special-mode)
@@ -476,9 +484,11 @@ values"
             (height (if arg (cdr sketch-size) (read-number "Enter height: "))))
         (switch-to-buffer (get-buffer-create "*sketch*"))
         (setq sketch-action 'line)
-        ;; (add-to-list 'mode-line-format '(:eval sketch-cursor-position) t)
         (setq sketch-grid-param (if arg 50 (read-number "Enter grid parameter (enter 0 for no grid): ")))
         (sketch--init width height sketch-grid-param)
+        (when sketch-show-coords
+          (setq sketch-coordless-mode-line-format mode-line-format)
+          (add-to-list 'mode-line-format '(:eval sketch-cursor-position) t))
         (setq sketch-call-buffer call-buffer))))) ;; variable is buffer local))
 
 (define-key image-map "o" nil)
@@ -511,6 +521,7 @@ transient."
     ("U" . sketch-redo)
     ("S" . image-save)
     ("tt" . sketch-toggle-toolbar)
+    ("tc" . sketch-toggle-coords)
     ("?" . sketch-help)
     (,(kbd "C-c C-c") . sketch-quick-insert-image))
   ;; (,(kbd "C-c C-s") . sketch-transient))
@@ -522,6 +533,7 @@ transient."
     (evil-local-set-key 'motion "tg" 'sketch-toggle-grid)
     (evil-local-set-key 'motion "ts" 'sketch-toggle-snap)
     (evil-local-set-key 'motion "tt" 'sketch-toggle-toolbar)
+    (evil-local-set-key 'motion "tc" 'sketch-toggle-coords)
     (evil-local-set-key 'motion "fw" 'sketch-set-font-with-keyboard)
     (evil-local-set-key 'motion "fs" 'sketch-set-font-size))
   (if (boundp 'undo-tree-mode)
@@ -637,10 +649,7 @@ VEC should be a cons or a list containing only number elements."
       (let* ((node (car (dom-by-id (nth sketch-active-layer sketch-layers-list)
                                    (if (memq sketch-action '(move translate))
                                        (car sketch-selection)
-                                     label)
-                                   ;; (transient-arg-value "--object="
-                                   ;;                      (oref transient-current-prefix value))
-                                   )))
+                                     label))))
              (translate-start (dom-attr node 'transform)))
         (track-mouse
           (cond ((member sketch-action '(line rectangle circle ellipse move translate))
@@ -659,11 +668,12 @@ VEC should be a cons or a list containing only number elements."
                        (sketch-redraw nil nil t)
                        (when (and sketch-lisp-buffer-name (buffer-live-p (get-buffer sketch-lisp-buffer-name)))
                          (sketch-update-lisp-window node sketch-lisp-buffer-name))
-                       (setq sketch-cursor-position (format "(%s, %s)"
-                                                            (car end-coords)
-                                                            (cdr end-coords)))
                        (setq event (read-event))
-                       ;; (force-mode-line-update)
+                       (when sketch-show-coords
+                         (setq sketch-cursor-position (format "(%s, %s)"
+                                                              (car end-coords)
+                                                              (cdr end-coords))))
+                       (sketch-maybe-update-modeline)
                        ))
                    (let* ((end (event-end event))
                           (end-coords (if sketch-snap-to-grid
@@ -704,8 +714,7 @@ VEC should be a cons or a list containing only number elements."
                      (setq sketch-cursor-position (format "(%s, %s)"
                                                           (car end-coords)
                                                           (cdr end-coords)))
-                     (force-mode-line-update)))
-                 ;; (sketch-possibly-update-image sketch-svg)))
+                     (sketch-maybe-update-modeline)))
                  (let* ((end (event-end event))
                         (end-coords (if sketch-snap-to-grid
                                         (sketch--snap-to-grid (posn-object-x-y end) sketch-minor-grid-param)
@@ -736,7 +745,7 @@ VEC should be a cons or a list containing only number elements."
                      (setq sketch-cursor-position (format "(%s, %s)"
                                                           (car end-coords)
                                                           (cdr end-coords)))
-                     (force-mode-line-update))))))))
+                     (sketch-maybe-update-modeline))))))))
     (when-let (buf (get-buffer "*sketch-root*"))
       (sketch-update-lisp-window sketch-root buf))
     (sketch-redraw)))
@@ -1244,6 +1253,15 @@ color."
   (sketch-redraw)
   (sketch-toolbar-refresh))
 
+(defun sketch-toggle-coords ()
+  (interactive)
+  (setq sketch-show-coords (if sketch-show-coords nil t))
+  (if (not sketch-show-coords)
+      (setq mode-line-format sketch-coordless-mode-line-format)
+    (setq sketch-coordless-mode-line-format mode-line-format)
+    (add-to-list 'mode-line-format '(:eval sketch-cursor-position) t)))
+
+
 (defvar-local sketch-call-buffer nil)
 
 (add-hook 'org-ctrl-c-ctrl-c-final-hook 'sketch-org-toggle-image)
@@ -1477,7 +1495,7 @@ then insert the image at the end"
                            (setq sketch-action (intern (button-label button)))
                            (sketch-toolbar-refresh))
                  (when (eq o sketch-action)
-                   (list 'face 'custom-button-unraised)))
+                   (list 'face 'link-visited)))
           (setq counter (1+ counter))
           (cond ((/= counter 4)
                  (dotimes (_ (- 10 (length (symbol-name o))))
@@ -1489,7 +1507,7 @@ then insert the image at the end"
                 ;;                    (setq sketch-action (intern (button-label button)))
                 ;;                    (sketch-toolbar-refresh))
                 ;;          (when (eq o sketch-action)
-                ;;            (list 'face 'custom-button-unraised))))
+                ;;            (list 'face 'link-visited))))
                 ;; ;; (list 'face (if (eq o sketch-action)
                 ;; ;;                 'widget-button-pressed
                 ;; ;;               'widget-button)))
@@ -1503,7 +1521,7 @@ then insert the image at the end"
                    (setq sketch-action (intern (button-label button)))
                    (sketch-toolbar-refresh))
          (when (eq 'freehand sketch-action)
-           (list 'face 'custom-button-unraised)))
+           (list 'face 'link-visited)))
   (insert "  ")
   (apply #'insert-text-button
          "text"
@@ -1511,7 +1529,7 @@ then insert the image at the end"
                    (setq sketch-action (intern (button-label button)))
                    (sketch-toolbar-refresh))
          (when (eq 'text sketch-action)
-           (list 'face 'custom-button-unraised)))
+           (list 'face 'link-visited)))
   (insert "\n\n")
   (insert "edit\n")
   (dolist (e '(select move translate))
@@ -1524,7 +1542,7 @@ then insert the image at the end"
                        ((or 'move 'translate) (user-error "Feature not yet implemented, instead press `m' to select and translate")))
                      (sketch-toolbar-refresh))
            (when (eq e sketch-action)
-             (list 'face 'custom-button-unraised)))
+             (list 'face 'link-visited)))
     (insert " ")
     ))
 
@@ -1537,7 +1555,7 @@ then insert the image at the end"
            (sketch-toggle-grid)
            (sketch-toolbar-refresh))
          (when sketch-show-grid
-           (list 'face 'custom-button-unraised)))
+           (list 'face 'link-visited)))
   ;; (list 'face (if sketch-grid
   ;;                 'widget-button-pressed
   ;;               'widget-button)))
@@ -1549,7 +1567,7 @@ then insert the image at the end"
            (sketch-toggle-snap)
            (sketch-toolbar-refresh))
          (when sketch-snap-to-grid
-           (list 'face 'custom-button-unraised)))
+           (list 'face 'link-visited)))
   (insert "   ")
   (insert "Labels: ")
   (apply #'insert-text-button (or sketch-show-labels "hide")
@@ -1558,7 +1576,7 @@ then insert the image at the end"
            (sketch-cycle-labels)
            (sketch-toolbar-refresh))
          (when sketch-show-labels
-           (list 'face 'custom-button-unraised))))
+           (list 'face 'link-visited))))
 ;; (list 'face (if sketch-snap-to-grid
 ;;                 'widget-button-pressed
 ;;               'widget-button))))
