@@ -44,8 +44,6 @@
    - show dom (lisp) in other window
    - draw angle arcs (between lines, available soon, I hope. See
      =implement-angle-arc= branch)
-   - save drawing presets using [[https://magit.vc/manual/transient.html#Saving-Values][transient's saving values feature]] (documentation
-     contribution welcome)
      
 ** Incomplete features (merged into main)
    - Draw labels (not implemented for all type of objects. Easy to implement)
@@ -106,7 +104,7 @@ VERSION. AN UPDATED SCREENSHOT WILL HOPEFULLY ARRIVE TOMORROW*
 
 * Usage
   Start a sketch with =M-x sketch= and enter values at the prompts (or prefix
-  with =C-u= to use default values). Although, thanks to the =transient=
+  with =C-u= to use default values). Although, thanks to the =hydra=
   package, the usage is more or less self explanatory, it is wise to take note
   of the following comments:
 
@@ -127,7 +125,7 @@ VERSION. AN UPDATED SCREENSHOT WILL HOPEFULLY ARRIVE TOMORROW*
     label of the object you want removed.
   - You can also modify the drawing by changing the object definition (i.e.
     elisp). For that press =d= to open the definition in a side-window, then
-    press =q= to hide (deactivate the) transient (keymap). Now modify the code
+    press =.= to hide (deactivate the) hydra (keymap). Now modify the code
     and press =C-c C=c=, to load it and update the =\*sketch\*= buffer.    
 
 * Bugs
