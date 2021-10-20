@@ -4,7 +4,7 @@
 
 ;; Author: D.L. Nicolai <dalanicolai@gmail.com>
 ;; Created: 17 Jul 2021
-;; Version: 0
+;; Version: 1.0
 
 ;; Keywords: multimedia
 ;; URL: https://github.com/dalanicolai/sketch-mode
@@ -425,6 +425,7 @@ If value of variable ‘sketch-show-labels' is ‘layer', create ..."
     (goto-char (point-min)) ; cursor over image looks better
     (setq sketch-im-x-offset (car (window-absolute-pixel-position)))
     (sketch-toggle-toolbar)
+    (when (featurep 'hydra) (hydra-sketch/body))
     (add-hook 'kill-buffer-hook 'sketch-kill-toolbar nil t)
     (special-mode)
     (sketch-mode)))
@@ -535,7 +536,9 @@ _sd_: dasharray   ^ ^               _u_/_U_: undo/redo    _tc_: coords
    ("tc" sketch-toggle-coords)
    ("?" sketch-help "help" :color blue)
    ("." nil  "exit hydra" :color blue :exit t)
-   ("q" sketch-quit-window "quit-restore" :exit t)))
+   ("q" sketch-quit-window "quit-restore" :exit t)
+   ("Q" sketch-quit "quit" :exit t)))
+
 
 (defun sketch-hydra ()
   (interactive)
@@ -546,15 +549,20 @@ _sd_: dasharray   ^ ^               _u_/_U_: undo/redo    _tc_: coords
 (define-key sketch-mode-map "." 'sketch-hydra)
 
 (defun sketch-quit-window ()
+  "Quit sketch window. The window can be restores with ‘M-x sketch'"
   (interactive)
   (when (get-buffer "*sketch-toolbar*")
     (kill-buffer "*sketch-toolbar*"))
   (quit-window))
 
-(when (boundp 'spacemacs-version)
-  (evil-define-minor-mode-key 'evilified sketch-mode "l" 'sketch-cycle-labels))
+(defun sketch-quit ()
+  "Quit sketch-mode and kill buffers."
+  (interactive)
+  (when (get-buffer "*sketch-toolbar*")
+    (kill-buffer "*sketch-toolbar*"))
+  (kill-buffer "*sketch*"))
 
-;;; 
+;;; Actions
 (defvar sketch-action 'line)
 (defvar sketch-stroke-color "Black")
 (defvar sketch-fill-color "none")

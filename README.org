@@ -24,9 +24,10 @@
   functionalities easily so that the package becomes ever more versatile. Users
   can also contribute by creating SVG snippets (in a separate repo, or create a
   PR). Any feedback, for example suggestions for enhancing the
-  interface/usability, is very welcome (probably best by opening an issue).
-  Also, any contributions are very welcome. The code of the package is very
-  accessible (especially if you quickly read how to use [[https://www.gnu.org/software/emacs/manual/html_node/elisp/Edebug.html][edebug]]).
+  interface/usability (and of course bug reports), is very welcome (probably
+  best by opening an issue). Also, any contributions are very welcome. The code
+  of the package is very accessible (especially if you quickly read how to use
+  [[https://www.gnu.org/software/emacs/manual/html_node/elisp/Edebug.html][edebug]]).
 
   A list of ideas for implementation can be found in the preliminary comment in
   the =sketch.el= file and additionally in the [[https://github.com/dalanicolai/sketch-mode/wiki/vision][wiki]] section.
