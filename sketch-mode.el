@@ -4,7 +4,7 @@
 
 ;; Author: D.L. Nicolai <dalanicolai@gmail.com>
 ;; Created: 17 Jul 2021
-;; Version: 1.0.1
+;; Version: 1.0.2
 
 ;; Keywords: multimedia
 ;; URL: https://github.com/dalanicolai/sketch-mode
@@ -56,7 +56,6 @@
 
 ;;;; Code
 (require 'svg)
-;; (require 'seq)
 (require 'shr-color)
 (require 'sgml-mode)
 (require 'org-element)
@@ -1187,13 +1186,18 @@ color."
       (set fn color)))
   (sketch-toolbar-refresh))
 
+(defun sketch-set-font-color ()
+  (interactive)
+  (sketch-set-colors 16))
+
 (defun sketch-set-font-with-keyboard (arg)
   (interactive "P")
   (if arg
       (sketch-set-font)
     (completing-read "Select font: " (font-family-list))))
 
-(defun sketch-set-font-size ()
+;; TODO merge with `sketch-set-font-size' (using `arg')
+(defun sketch-set-font-size-by-keyboard ()
   (interactive)
   (setq sketch-font-size (string-to-number
                           (completing-read "Select font size: " (number-sequence 8 60)))))
@@ -1244,7 +1248,65 @@ color."
     (goto-char (point-min))
     (special-mode)))
 
+(defun sketch-set-font-size ()
+  (interactive)
+  (pop-to-buffer "*sketch-font-sizes*" '(display-buffer-reuse-mode-window (mode . special-mode)))
+  (let ((inhibit-read-only t))
+    (dolist (x (nreverse '(8 10 12 14 16 20 24 28 32 40 48 56 64 80 96 112 128 160 192)))
+      (let ((button-width (/ (* 8 x) 3))
+            (button-height x)
+            (s (number-to-string x)))
+        (insert-text-button s
+                            'action
+                            (lambda (button) (interactive)
+                              (setq sketch-font-size (string-to-number (button-label button)))
+                              (kill-buffer)
+                              (sketch-toolbar-refresh))
+                            'display (svg-image (let ((svg (svg-create button-width button-height)))
+                                                  (svg-rectangle svg 0 0 button-width button-height
+                                                                 :fill "white")
+                                                  (svg-text svg "Aa"
+                                                            :font-size button-height
+                                                            :font-family sketch-font
+                                                            :stroke "black"
+                                                            :fill "black"
+                                                            :x 4
+                                                            :y (- button-height 4))
+                                                  svg)))
+        (insert " ")
+        (insert s)
+        (insert "\n"))
+      (goto-char (point-min)))))
 
+(defun sketch-set-color ()
+  (interactive)
+  (pop-to-buffer "*sketch-color*" '(display-buffer-reuse-mode-window (mode . special-mode)))
+  (let ((inhibit-read-only t))
+    (dolist (x shr-color-html-colors-alist)
+      (let ((button-width (/ (* 8 x) 3))
+            (button-height x)
+            (s (number-to-string x)))
+        (insert-text-button s
+                            'action
+                            (lambda (button) (interactive)
+                              (setq sketch-font-size (string-to-number (button-label button)))
+                              (kill-buffer)
+                              (sketch-toolbar-refresh))
+                            'display (svg-image (let ((svg (svg-create button-width button-height)))
+                                                  (svg-rectangle svg 0 0 button-width button-height
+                                                                 :fill "white")
+                                                  (svg-text svg "Aa"
+                                                            :font-size button-height
+                                                            :font-family sketch-font
+                                                            :stroke "black"
+                                                            :fill "black"
+                                                            :x 4
+                                                            :y (- button-height 4))
+                                                  svg)))
+        (insert " ")
+        (insert s)
+        (insert "\n"))
+      (goto-char (point-min)))))
 
 (defun sketch-toggle-grid ()
   (interactive)
@@ -1402,22 +1464,19 @@ then insert the image at the end"
                                 (setq sketch-stroke-color "none")
                                 (sketch-toolbar-refresh)))
   (insert "\n\n")
-  (let ((counter 0))
-    (dolist (color sketch-colors-basic)
-      (insert-text-button "   "
-                          'action
-                          (lambda (button) (interactive)
-                            (setq sketch-stroke-color
-                                  (car (rassoc (plist-get (button-get button 'face) :background)
-                                               shr-color-html-colors-alist)))
-                            (sketch-toolbar-refresh)
-                            ;; (transient-quit-all)
-                            ;; (call-interactively #'sketch-transient)
-                            )
-                          'face (list
-                                 :background (alist-get color
-                                                        shr-color-html-colors-alist
-                                                        nil nil 'string=)))
+    (let ((counter 0))
+      (dolist (color sketch-colors-basic)
+        (insert-text-button "   "
+                            'action
+                            (lambda (button) (interactive)
+                              (setq sketch-stroke-color
+                                    (car (rassoc (plist-get (button-get button 'face) :background)
+                                                 shr-color-html-colors-alist)))
+                              (sketch-toolbar-refresh))
+                            'face (list
+                                   :background (alist-get color
+                                                          shr-color-html-colors-alist
+                                                          nil nil 'string=)))
       (setq counter (1+ counter))
       (if (not (= counter 8))
           (insert " ")
@@ -1593,8 +1652,7 @@ then insert the image at the end"
   (insert "family: ")
   (if sketch-font
       (let ((button-width (* 2 5 (default-font-width)))
-            (button-height (default-font-height))
-            (counter 0))
+            (button-height (default-font-height)))
         (insert-text-button sketch-font
                             'action
                             (lambda (_) (interactive)
