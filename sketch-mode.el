@@ -4,7 +4,7 @@
 
 ;; Author: D.L. Nicolai <dalanicolai@gmail.com>
 ;; Created: 17 Jul 2021
-;; Version: 1.0
+;; Version: 1.0.1
 
 ;; Keywords: multimedia
 ;; URL: https://github.com/dalanicolai/sketch-mode
@@ -650,7 +650,7 @@ VEC should be a cons or a list containing only number elements."
                                                 points))))
          (label (unless (memq sketch-action '(move translate))
                   (sketch-create-label sketch-action))))
-    (pcase  sketch-action
+    (pcase sketch-action
       ('text (hydra-sketch/nil)
              (let ((text (read-string "Enter text: ")))
                (apply #'svg-text
@@ -712,58 +712,58 @@ VEC should be a cons or a list containing only number elements."
                         (sketch-update-lisp-window node sketch-lisp-buffer-name))))))
 
 
-                   ((or polyline polygon)
-                    (while (not (eq (car event) 'double-mouse-1))
-                      (setq event (read-event))
-                      (let* ((end (event-start event))
-                             (end-coords (if sketch-snap-to-grid
-                                             (sketch--snap-to-grid (posn-object-x-y end) sketch-minor-grid-param)
-                                           (posn-object-x-y end))))
-                        (let (message-log-max)
-                          (message "Press double click finish by inserting a final node"))
-                        (setf (dom-attr node 'points) (mapconcat (lambda (pair)
-                                                                   (format "%s %s" (car pair) (cdr pair)))
-                                                                 (reverse
-                                                                  (if (eq (car event) 'down-mouse-1)
-                                                                      (push end-coords points)
-                                                                    (cons end-coords points)))
-                                                                 ", "))
-                        (sketch-redraw nil nil t)
-                        (setq sketch-cursor-position (format "(%s, %s)"
-                                                             (car end-coords)
-                                                             (cdr end-coords)))
-                        (sketch-maybe-update-modeline)))
-                    (let* ((end (event-end event))
-                           (end-coords (if sketch-snap-to-grid
-                                           (sketch--snap-to-grid (posn-object-x-y end) sketch-minor-grid-param)
-                                         (posn-object-x-y end))))
-                      (setf (dom-attr node 'points) (mapconcat (lambda (pair)
-                                                                 (format "%s %s" (car pair) (cdr pair)))
-                                                               (reverse
-                                                                (if (eq (car event) 'down-mouse-1)
-                                                                    (push end-coords points)
-                                                                  (cons end-coords points)))
-                                                               ", "))))
+               ((or polyline polygon)
+                (while (not (eq (car event) 'double-mouse-1))
+                  (setq event (read-event))
+                  (let* ((end (event-start event))
+                         (end-coords (if sketch-snap-to-grid
+                                         (sketch--snap-to-grid (posn-object-x-y end) sketch-minor-grid-param)
+                                       (posn-object-x-y end))))
+                    (let (message-log-max)
+                      (message "Press double click to finish by inserting a final node"))
+                    (setf (dom-attr node 'points) (mapconcat (lambda (pair)
+                                                               (format "%s %s" (car pair) (cdr pair)))
+                                                             (reverse
+                                                              (if (eq (car event) 'down-mouse-1)
+                                                                  (push end-coords points)
+                                                                (cons end-coords points)))
+                                                             ", "))
+                    (sketch-redraw nil nil t)
+                    (setq sketch-cursor-position (format "(%s, %s)"
+                                                         (car end-coords)
+                                                         (cdr end-coords)))
+                    (sketch-maybe-update-modeline)))
+                (let* ((end (event-end event))
+                       (end-coords (if sketch-snap-to-grid
+                                       (sketch--snap-to-grid (posn-object-x-y end) sketch-minor-grid-param)
+                                     (posn-object-x-y end))))
+                  (setf (dom-attr node 'points) (mapconcat (lambda (pair)
+                                                             (format "%s %s" (car pair) (cdr pair)))
+                                                           (reverse
+                                                            (if (eq (car event) 'down-mouse-1)
+                                                                (push end-coords points)
+                                                              (cons end-coords points)))
+                                                           ", "))))
 
 
-                   ('freehand
-                    (while (not (memq (car event) '(mouse-1 drag-mouse-1)))
-                      (setq event (read-event))
-                      (let* ((end (if (eq (car event) 'drag-mouse-1)
-                                      (event-end event)
-                                    (event-start event)))
-                             (end-coords (if sketch-snap-to-grid
-                                             (sketch--snap-to-grid (posn-object-x-y end) sketch-minor-grid-param)
-                                           (posn-object-x-y end))))
-                        (setf (dom-attr node 'points) (mapconcat (lambda (pair)
-                                                                   (format "%s %s" (car pair) (cdr pair)))
-                                                                 (reverse (cl-pushnew end-coords points))
-                                                                 ", "))
-                        (sketch-redraw nil nil t)
-                        (setq sketch-cursor-position (format "(%s, %s)"
-                                                             (car end-coords)
-                                                             (cdr end-coords)))
-                        (sketch-maybe-update-modeline)))))))))
+               ('freehand
+                (while (not (memq (car event) '(mouse-1 drag-mouse-1)))
+                  (setq event (read-event))
+                  (let* ((end (if (eq (car event) 'drag-mouse-1)
+                                  (event-end event)
+                                (event-start event)))
+                         (end-coords (if sketch-snap-to-grid
+                                         (sketch--snap-to-grid (posn-object-x-y end) sketch-minor-grid-param)
+                                       (posn-object-x-y end))))
+                    (setf (dom-attr node 'points) (mapconcat (lambda (pair)
+                                                               (format "%s %s" (car pair) (cdr pair)))
+                                                             (reverse (cl-pushnew end-coords points))
+                                                             ", "))
+                    (sketch-redraw nil nil t)
+                    (setq sketch-cursor-position (format "(%s, %s)"
+                                                         (car end-coords)
+                                                         (cdr end-coords)))
+                    (sketch-maybe-update-modeline)))))))))
     (when-let (buf (get-buffer "*sketch-root*"))
       (sketch-update-lisp-window sketch-root buf))
     (sketch-redraw)))

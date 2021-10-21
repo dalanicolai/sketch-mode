@@ -5,11 +5,11 @@
   The initial version with the transient can be found in the 'transient-version'
   branch. This version introduced a toolbar which made the transient
   unnecessary. Also removing the transient frees up drawing space. It has been
-  replaced by a hydra which can togglable. Also an earlier version showed the
+  replaced by a hydra which is togglable. Also an earlier version showed the
   mouse coordinate position in the mode-line. However, this functionality
-  hinders the 'interactive' drawing (which might could be considered an emacs
-  bug). Anyway, you can toggle showing the coordinates by pressing =t c= (maybe
-  it works more fluently on your system).
+  hinders the 'interactive' drawing (which might be due to an emacs 'bug').
+  Anyway, you can toggle showing the coordinates by pressing =t c= (maybe it
+  works more fluently on your system).
 
 * Preliminary comment
   This is a new package that is still in development. It has been on ELPA-devel
@@ -34,12 +34,12 @@
   
 ** Included features
    - mnemonic shortcuts + hydra and (alternatively) a toolbar
-   - quickly insert image definition into new type (image) org-block (no
-     external file required)
+   - quickly insert image definition into new type (image) org-block with the
+     image rendered as overlay (no external file required)
    - snap to grid (on minor-grid, however major and minor grid are fully
      configurable)
    - draw text
-   - crop finale image
+   - crop final image
    - set stroke, fill, width etc.
    - show dom (lisp) in other window
    - draw angle arcs (between lines, available soon, I hope. See
@@ -64,17 +64,23 @@
   The =sketch-mode.el= file starts with listing TODO items describing features
   that are missing from the package.
 
-  [[./happy-sketching.gif]] *THIS SCREENCAST STILL SHOWS THE SKETCH-MODE TRANSIENT
-VERSION. AN UPDATED SCREENSHOT WILL HOPEFULLY ARRIVE TOMORROW*
+  [[./happy-sketching.gif]]
+  *THIS SCREENCAST STILL SHOWS THE SKETCH-MODE TRANSIENT VERSION. AN UPDATED
+  SCREENSHOT WILL HOPEFULLY ARRIVE TOMORROW*
 
 * Installation
-  When installing the package it probably still shows some warnings, you can
-  safely ignore them.
+  The package is available from [[https://elpa.gnu.org/packages/sketch-mode.html][GNU ELPA]], so it can simply get installed as
+  usual. However, the publishing 'cycle' on ELPA is somewhat slow, while
+  development on this package is 'less slow'. So you might prefer to install
+  from github directly as follows:
   
   Either =git clone= the package and load =sketch-mode.el= using =load file=
   either manually or from =.emacs.d=.
 
-  Alternatively you could use a [[quelpa][https://github.com/quelpa/quelpa]] with the
+  When installing the package it probably still shows some warnings, you can
+  safely ignore them.
+  
+  Alternatively you could use [[quelpa][https://github.com/quelpa/quelpa]] with the
   following recipe:
  #+begin_src emacs-lisp :tangle yes
    (quelpa '(sketch-mode :repo "dalanicolai/sketch-mode" :fetcher github))
@@ -86,7 +92,11 @@ VERSION. AN UPDATED SCREENSHOT WILL HOPEFULLY ARRIVE TOMORROW*
 #+end_src  
 
 ** Spacemacs
-  Add the following lines to =dotspacemacs-additional-packages=
+  The package is available from [[https://elpa.gnu.org/packages/sketch-mode.html][GNU ELPA]], so it can simply get installed by
+  simply adding =sketch-mode= to =dotspacemacs-additional-packages=. However,
+  the publishing 'cycle' on ELPA is somewhat slow, while development on this
+  package is 'less slow'. So you might prefer to install from github directly as
+  follows:
   
 #+begin_src emacs-lisp :tangle yes
   (sketch-mode :location (recipe
@@ -147,7 +157,7 @@ VERSION. AN UPDATED SCREENSHOT WILL HOPEFULLY ARRIVE TOMORROW*
   it, then I would be very happy with any donation (of course that would also
   enable me to work on your feature requests). As soon as I have the
   opportunity/possibility to find a stable job, I will happily suggest you to
-  transfer or donate to other projects/charity.
+  transfer or donate to other projects/charity instead.
 
   If you would like to =boost= development of any of my projects, then
   contribute (code or documentation), or consider more sustainable financial
