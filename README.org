@@ -1,7 +1,10 @@
 #+TITLE: Sketch mode
 #+DESCRIPTION: Quickly create simple SVG sketches using the mouse
 
+  *Please read the [[Requirements][requirements]] section below before trying this package*
+  
 * Prepreliminary comment
+  
   The initial version with the transient can be found in the 'transient-version'
   branch. This version introduced a toolbar which made the transient
   unnecessary. Also removing the transient frees up drawing space. It has been
@@ -67,6 +70,15 @@
   [[./happy-sketching.gif]]
   *THIS SCREENCAST STILL SHOWS THE SKETCH-MODE TRANSIENT VERSION. AN UPDATED
   SCREENSHOT WILL HOPEFULLY ARRIVE TOMORROW*
+
+* Requirements
+  
+  This package requires Emacs to have been build with SVG support (I guess that,
+  in other words, this means it must have been build with cairo support, but I
+  still have to find out)
+
+  Also the hydra package is recommended for informing/reminding about the
+  keybindings.
 
 * Installation
   The package is available from [[https://elpa.gnu.org/packages/sketch-mode.html][GNU ELPA]], so it can simply get installed as
