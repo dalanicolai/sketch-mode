@@ -876,6 +876,43 @@ selection shows all object in sketch."
                        value)
                " "))
 
+(defun sketch--svg-rotate (dt &optional object-def)
+  (interactive)
+  (let ((transform (sketch-parse-transform-value
+                    (or (dom-attr object-def 'transform)
+                        "rotate(0)"))))
+    (cl-decf (cl-first (alist-get 'rotate transform)) dt)
+    (dom-set-attribute object-def
+                       'transform
+                       (sketch-format-transfrom-value transform))))
+
+(defun sketch-rotate (deg)
+  (interactive)
+  (let ((node (car (dom-by-id sketch-svg (car sketch-selection)))))
+    (sketch--svg-rotate deg node)
+    (sketch-redraw)))
+
+(defun sketch-rotate-by-5 (arg)
+  (interactive)
+  (let ((node (car (dom-by-id sketch-svg (car sketch-selection)))))
+    (sketch--svg-rotate (if arg -5 5) node)
+    (sketch-redraw)))
+
+(defun sketch-rotate-by-min-5 ()
+  (interactive)
+  (sketch-rotate-by-5 t))
+
+(defun sketch--svg-translate (dx dy &optional object-def)
+  (interactive)
+  (let ((transform (sketch-parse-transform-value
+                    (or (dom-attr object-def 'transform)
+                        "translate(0,0)"))))
+    (cl-decf (cl-first (alist-get 'translate transform)) dx)
+    (cl-decf (cl-second (alist-get 'translate transform)) dy)
+    (dom-set-attribute object-def
+                       'transform
+                       (sketch-format-transfrom-value transform))))
+
 (defun sketch--svg-translate (dx dy &optional object-def)
   (interactive)
   (let ((transform (sketch-parse-transform-value
@@ -1303,7 +1340,8 @@ color."
         (insert " ")
         (insert s)
         (insert "\n"))
-      (goto-char (point-min)))))
+      (goto-char (point-min))
+      (special-mode))))
 
 (defun sketch-set-color ()
   (interactive)
