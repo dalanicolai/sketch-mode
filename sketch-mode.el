@@ -4,7 +4,7 @@
 
 ;; Author: D.L. Nicolai <dalanicolai@gmail.com>
 ;; Created: 17 Jul 2021
-;; Version: 1.0.2
+;; Version: 1.0.3
 
 ;; Keywords: multimedia
 ;; URL: https://github.com/dalanicolai/sketch-mode
@@ -56,7 +56,6 @@
 
 ;;;; Code
 (require 'svg)
-;; (require 'seq)
 (require 'shr-color)
 (require 'sgml-mode)
 (require 'org-element)
@@ -442,7 +441,7 @@ transient."
     ([sketch down-mouse-1] . sketch-interactively)
     ([sketch mouse-3] . sketch-text-interactively)
     ([sketch C-S-drag-mouse-1] . sketch-crop)
-    ;; ([sketch S-down-mouse-1] . sketch-select)
+    ([sketch S-down-mouse-1] . sketch-select)
     ("a" . sketch-set-action)
     ("c" . sketch-set-colors)
     ("w" . sketch-set-width)
@@ -456,6 +455,7 @@ transient."
     ("tg" . sketch-toggle-grid)
     ("ts" . sketch-toggle-snap)
     ("tt" . sketch-toggle-toolbar)
+    ("." . sketch-toggle-key-hints)
     ("tc" . sketch-toggle-coords)
     ("l" . sketch-cycle-labels)
     ("D" . sketch-show-definition)
@@ -465,7 +465,7 @@ transient."
     (,(kbd "C-c C-c") . sketch-quick-insert-image)
     ("?" . sketch-help)
     ("Q" . sketch-quit))
-  ;; (,(kbd "C-c C-s") . sketch-transient))
+    ;; (,(kbd "C-c C-s") . sketch-transient))
   (with-no-warnings
     (if (boundp 'undo-tree-mode)
         (undo-tree-mode))
@@ -473,48 +473,37 @@ transient."
   (setq-local global-hl-line-mode nil)
   (blink-cursor-mode 0))
 
-(when (eval-when-compile
-      (require 'hydra nil t))
-    (defhydra sketch-hydra (:hint nil)
-      "
-^Stroke/Fill^     ^Font^            ^Edit^              ^Toggle^
-^^^^^^^^-------------------------------------------------------------
-_a_ : action      _fw_: font        _v_  : select       _tg_: grid
-_c_ : color       _fs_: sont-size   _m_  : modify       _ts_: snap
-_w_ : width       ^ ^               _d_  : delete       _tt_: toolbar
-_sd_: dasharray   ^ ^               _u_/_U_: undo/redo  _tc_: coords
-"
-      ("a" sketch-set-action)
-      ("c" sketch-set-colors)
-      ("w" sketch-set-width)
-      ("sd" sketch-set-dasharray)
-      ("fw" sketch-set-font-with-keyboard)
-      ("fs" sketch-set-font-size-by-keyboard)
-      ("v" sketch-keyboard-select)
-      ("m" sketch-modify-object)
-      ("d" sketch-remove-object)
-      ("tg" sketch-toggle-grid)
-      ("ts" sketch-toggle-snap)
-      ("l" sketch-cycle-labels)
-      ("D" sketch-show-definition)
-      ("u" sketch-undo)
-      ("U" sketch-redo)
-      ("S" image-save)
-      ("tt" sketch-toggle-toolbar)
-      ("tc" sketch-toggle-coords)
-      ("?" sketch-help "help" :color blue)
-      ("." nil  "exit hydra" :color blue)
-      ("q" sketch-quit-window "quit-restore")
-      ("Q" sketch-quit "quit")))
+;; TODO format/propertize key hints
+(defun sketch-toggle-key-hints ()
+  (interactive)
+  (let ((win (get-buffer-window "*sketch-key-hints*")))
+    (if win
+        (delete-window win)
+      (let ((window-sides-vertical t)
+            (buffer (get-buffer-create "*sketch-key-hints*")))
+        (set-window-dedicated-p
+         (display-buffer-in-side-window (get-buffer-create "*sketch-key-hints*")
+                                        `((side . bottom)
+                                          (slot . -1)
+                                          (window-height . 10)))
+         t)
+        (with-current-buffer buffer
+          (insert
+           "Stroke/Fill            Font              Edit               Toggle          Definition
+-----------------------------------------------------------------------------------------------
+[a]      : action      [fw]: font        [v]  : select      [tg]: grid      [D] Show definition
+[(C-u) c]: color       [fs]: font-size   [m]  : modify      [ts]: snap
+[w]      : width       [fc]: font-color  [d]  : delete      [tt]: toolbar
+[sd]     : dasharray                     [u/U]: undo/redo   [tc]: coords
 
-(with-no-warnings
-  (defun sketch-hydra ()
-    (interactive)
-    (if (featurep 'hydra)
-        (sketch-hydra/body)
-      (user-error "This feature requires the hydra package to be installed"))))
+[down-mouse-1] main action, [down-mouse-3] add text")
+          (setq cursor-type nil)
+          (special-mode))))))
 
-(define-key sketch-mode-map "." 'sketch-hydra)
+(defun sketch-kill-key-hints ()
+  (let ((key-hints (get-buffer "*sketch-key-hints*")))
+    (when key-hints
+      (kill-buffer key-hints))))
 
 ;;;###autoload
 (defun sketch (arg)
@@ -525,7 +514,10 @@ values"
   (let ((buffer (get-buffer "*sketch*")))
     (cond (buffer
            (switch-to-buffer buffer)
-           (sketch-toggle-toolbar))
+           ;; TODO maybe immprove, i.e. always show on visit
+           (sketch-toggle-toolbar)
+           (sketch-toggle-key-hints)
+           )
           (t
            (let ((call-buffer (current-buffer))
                  (width (if arg (car sketch-size) (read-number "Enter width: ") ))
@@ -558,7 +550,9 @@ values"
   (goto-char (point-min)) ; cursor over image looks better
   (setq sketch-im-x-offset (car (window-absolute-pixel-position)))
   (sketch-toggle-toolbar)
+  (sketch-toggle-key-hints)
   (add-hook 'kill-buffer-hook 'sketch-kill-toolbar nil t)
+  (add-hook 'kill-buffer-hook 'sketch-kill-key-hints nil t)
   (special-mode)
   (sketch-mode))
 
@@ -798,7 +792,6 @@ VEC should be a cons or a list containing only number elements."
     ;;               (if sketch-include-end-marker
     ;;                   "url(#arrow)"
     ;;                 "none"))))
-
     (apply #'svg-text
            (nth sketch-active-layer sketch-layers-list)
            text
@@ -1415,7 +1408,7 @@ then insert the image at the end"
   (with-current-buffer (get-buffer "*sketch-toolbar*")
     (let ((inhibit-read-only t))
       (erase-buffer)
-      (insert (propertize "Press . for hydra or press ? for help\n\n" 'face 'bold))
+      (insert (propertize "Press . for key hints or press ? for help\n\n" 'face 'bold))
       (sketch-toolbar-colors)
       (insert "\n\n")
       (sketch-toolbar-widths)
@@ -1426,6 +1419,7 @@ then insert the image at the end"
       (insert "\n\n")
       (sketch-toolbar-font)
       (goto-char (point-min)))))
+
 
 (defun sketch-toggle-toolbar ()
   (interactive)
