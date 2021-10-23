@@ -207,7 +207,6 @@ If the SVG is later changed, the image will also be updated."
                         (number-sequence 0 (1- (length sketch-layers-list)))
                         ", "))))
 
-
 (defun sketch-labels ()
   "Create svg-group with svg text nodes for all elements in layer.
 If value of variable ‘sketch-show-labels' is ‘layer', create ..."
@@ -856,40 +855,174 @@ selection shows all object in sketch."
     (cl-incf (alist-get coord props) amount))
   (sketch-redraw object-def buffer))
 
-(defun sketch-parse-transform-value (value)
-  (let ((transforms (mapcar (lambda (val)
-                              (split-string val "[(,)]" t))
-                            (split-string value))))
-    (mapcar (lambda (x)
-              (cons (intern (car x)) (mapcar (lambda (val)
-                                               (string-to-number val))
-                                             (cdr x))))
-            transforms)))
+(defun sketch-parse-transform-string (value)
+  "Parse SVG transform VALUE (string) to alist.
+The elements of the alist cons-cell consisting of the
+transform (symbol) and its values (list)."
+  (mapcar (lambda (p)
+            (cons (intern (car p))
+                  (mapcar #'string-to-number (split-string (cadr p)))))
+          (seq-partition (split-string value "[()\n]+" t " *") 2)))
 
-(defun sketch-format-transfrom-value (value)
-  (string-join (mapcar (lambda (x) (concat (symbol-name (car x))
-                                           "("
-                                           (number-to-string (cadr x))
-                                           (if-let (y (caddr x))
-                                               (concat "," (number-to-string y)))
-                                           ")"))
-                       value)
-               " "))
+(defun sketch-format-transform (transform-alist)
+  "Format TRANSFORM-ALIST to transform string.
+The TRANSFORM-ALIST generally is a transform of the an alist
+returned by the function `sketch-parse-transform-string'"
+  (mapconcat #'identity
+             (mapcar (lambda (c)
+                       (format "%s(%s)"
+                               (symbol-name (car c))
+                               (mapconcat #'number-to-string (cdr c) " ")))
+                     transform-alist)
+             "\n"))
+
+(defun sketch-prop-vals (props &rest keys)
+  (mapcar (lambda (p) (alist-get p props)) keys))
+
+(defun sketch-bbox-ex-transform (object)
+  (pcase object
+    (`(line ,props)
+     (sketch-prop-vals props
+                       'x1 'y1 'x2 'y2))
+
+    (`(rect ,props)
+     (pcase-let ((`(,x ,y ,w ,h)
+                  (sketch-prop-vals props 'x 'y 'width 'height)))
+       (list x y (+ x w) (+ y h))))
+
+    (`(circle ,props)
+     (pcase-let ((`(,cx ,cy ,r) (sketch-prop-vals props
+                                                'cx 'cy 'r)))
+       (print (list (- cx r) (+ cx r) (- cy r) (+ cy r)))))
+
+    (`(ellipse ,props)
+     (pcase-let ((`(,cx ,cy ,rx ,ry) (sketch-prop-vals props
+                                                     'cx 'cy 'rx 'ry)))
+       (print (list (- cx rx) (+ cx rx) (- cy ry) (+ cy ry)))))
+    (`(text ,props ,text)
+     (pcase-let ((`(,x ,y ,fs) (sketch-prop-vals props
+                                                 'x 'y 'font-size))
+                 (text-length (length text)))
+       (list x y (* text-length (/ fs 1.6)) fs)))))
+
+(defun sketch-rot-2d (x y angle &optional deg)
+  (let ((angle (if deg
+                   (degrees-to-radians deg)
+                 angle)))
+    (cons (- (* x (cos angle)) (* y (sin angle)))
+          (+ (* x (sin angle)) (* y (cos angle))))))
+
+(defun sketch--object-bbox-transform (object)
+  (let* ((area (sketch-bbox-ex-transform object))
+         (transform (sketch-parse-transform-string (dom-attr object 'transform)))
+         (x1 (cl-first area))
+         (y1 (cl-second area))
+         (x2 (cl-third area))
+         (y2 (cl-fourth area))
+         (cx (/ (+ x1 x2) 2)) ; object x center
+         (cy (/ (+ y1 y2) 2))
+         (x-rad (abs (- cx x1))) ; object half-width
+         (y-rad (abs (- cy y1))))
+    (dolist (t-vals transform) ;; TODO maybe order first (rotate before
+                               ;; translate etc.), check how this is implemented in
+                               ;; SVG
+      (pcase (car t-vals)
+        ('translate (cl-incf  (cl-second t-vals))
+                    (when (cl-third t-vals)
+                      (cl-incf y1 (cl-third t-vals))))
+        ;; To determine the bounding box after a rotation, we separate the
+        ;; rotation in a translation of the center (rotation about a 'pivot) of
+        ;; the bbox plus a rotation of the bbox around its center. Because the
+        ;; bounding box always stays 'upright' (a mouse drag rectangle never
+        ;; rotates), we can get the new bounding box by considering how much its
+        ;; grows/expands through rotation around its 'translated' center.
+        ('rotate (let* ((rad (degrees-to-radians (nth 1 t-vals)))
+                        (px (or (nth 2 t-vals) 0)) ; pivot x position
+                        (py (or (nth 3 t-vals) 0))
+                        (vpx (- cx px)) ; vector pivot to center
+                        (vpy (- cy py))
+                        (vp-new (sketch-rot-2d vpx vpy rad))
+                        (c-new (cons (+ px (car vp-new)) (+ py (cdr vp-new))))
+                        (vx x-rad) ;vector-x center to bbox corner
+                        (vy y-rad)
+                        (v-new (sketch-rot-2d vx vy rad)))
+                   (print vp-new)
+                   (print (list (- (car vp-new) (car v-new)) (- (cdr vp-new) (cdr v-new))
+                                (+ (car vp-new) (car v-new)) (+ (cdr vp-new) (cdr v-new))))))
+        ('scale (let* ((new-x-rad (* (nth 1 t-vals) x-rad))
+                       (new-y-rad (when-let (sy (nth 2 t-vals))
+                                    (* (nth 2 t-vals) y-rad)))
+                       (new-y1 (if new-y-rad (- cy new-y-rad) y1))
+                       (new-y2 (if new-y-rad (+ cy new-y-rad) y2)))
+                  (print (list (- cx new-x-rad) new-y1 (+ cx new-x-rad) new-y2))))))))
+
+
+;; (defun sketch-bbox ()
+;;   (let (())))
+
+(defun sketch--svg-rotate (dt pivot &optional object-def)
+  (interactive)
+  (let* ((transform (sketch-parse-transform-string
+                    (or (dom-attr object-def 'transform)
+                        "rotate(0 0 0)")))
+         (bbox (print (sketch-bbox-ex-transform object-def)))
+        (pivot (if (eq pivot 'center)
+                   (cons (/ (+ (nth 2 bbox) (nth 0 bbox)) 2)
+                         (/ (+ (nth 3 bbox) (nth 1 bbox)) 2))
+               pivot)))
+    (cl-decf (cl-first (alist-get 'rotate transform)) dt)
+    (when pivot
+      (setf (cl-second (alist-get 'rotate transform)) (car pivot))
+      (setf (cl-third (alist-get 'rotate transform)) (cdr pivot)))
+    (print object-def)
+    (dom-set-attribute object-def
+                       'transform
+                       (sketch-format-transform transform))
+    (print object-def)))
+
+(defun sketch-rotate (deg &optional lisp-buffer)
+  (interactive)
+  (let ((node (car (dom-by-id sketch-svg (car sketch-selection)))))
+    (sketch--svg-rotate deg 'center node)
+    (sketch-redraw)
+    (when lisp-buffer
+      (sketch-update-lisp-window))))
+
+(defun sketch-rotate-by-5 (&optional arg)
+  (interactive)
+  (let ((node (car (dom-by-id sketch-svg (car sketch-selection)))))
+    (sketch--svg-rotate (if arg -5 5) 'center node)
+    (sketch-redraw)))
+
+(defun sketch-rotate-by-min-5 ()
+  (interactive)
+  (sketch-rotate-by-5 t))
 
 (defun sketch--svg-translate (dx dy &optional object-def)
   (interactive)
-  (let ((transform (sketch-parse-transform-value
+  (let ((transform (sketch-parse-transform-string
                     (or (dom-attr object-def 'transform)
                         "translate(0,0)"))))
     (cl-decf (cl-first (alist-get 'translate transform)) dx)
     (cl-decf (cl-second (alist-get 'translate transform)) dy)
     (dom-set-attribute object-def
                        'transform
-                       (sketch-format-transfrom-value transform))))
+                       (sketch-format-transform transform))))
+
+(defun sketch--svg-translate (dx dy &optional object-def)
+  (interactive)
+  (let ((transform (sketch-parse-transform-string
+                    (or (dom-attr object-def 'transform)
+                        "translate(0,0)"))))
+    (cl-decf (cl-first (alist-get 'translate transform)) dx)
+    (cl-decf (cl-second (alist-get 'translate transform)) dy)
+    (dom-set-attribute object-def
+                       'transform
+                       (sketch-format-transform transform))))
 
 (defun sketch--svg-move (dx dy &optional object-def start-node)
   (interactive)
-  (let ((transform (sketch-parse-transform-value
+  (let ((transform (sketch-parse-transform-string
                     (if start-node
                         start-node
                       "translate(0,0)"))))
@@ -905,11 +1038,11 @@ selection shows all object in sketch."
       (cl-incf (cl-second (alist-get 'translate transform)) dy)))
     (dom-set-attribute object-def
                        'transform
-                       (sketch-format-transfrom-value transform))
+                       (sketch-format-transform transform))
     start-node))
 
 (defun sketch-group-scale (buffer object-def direction &optional fast)
-  (let ((transform (sketch-parse-transform-value
+  (let ((transform (sketch-parse-transform-string
                     (dom-attr object-def
                               'transform)))
         (amount (if fast
@@ -922,7 +1055,7 @@ selection shows all object in sketch."
       ('down (cl-decf (car (alist-get 'scale transform)) amount)))
     (dom-set-attribute object-def
                        'transform
-                       (sketch-format-transfrom-value transform))
+                       (sketch-format-transform transform))
     (sketch-redraw object-def buffer)))
 
 (define-minor-mode sketch-lisp-mode
