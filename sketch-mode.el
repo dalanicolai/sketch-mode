@@ -571,30 +571,41 @@ transient."
   (setq-local global-hl-line-mode nil)
   (blink-cursor-mode 0))
 
+(defun sketch-quit-side-windows ()
+  "Quit sketch window. The window can be restores with ‘M-x sketch'"
+  (when (eq major-mode 'sketch-mode)
+    (when (get-buffer "*sketch-toolbar*")
+      (kill-buffer "*sketch-toolbar*"))
+    (when (get-buffer "*sketch-key-hints*")
+      (kill-buffer "*sketch-key-hints*"))))
+
+(add-hook 'quit-window-hook 'sketch-quit-side-windows)
+
 ;; TODO format/propertize key hints
-(defun sketch-toggle-key-hints ()
+(defun sketch-toggle-key-hints (&optional show)
+  "Toggle key-hints, when SHOW non-nil then show key-hints."
   (interactive)
   (let ((win (get-buffer-window "*sketch-key-hints*")))
     (if win
-        (delete-window win)
-      (let ((window-sides-vertical t)
-            (buffer (get-buffer-create "*sketch-key-hints*")))
-        (set-window-dedicated-p
-         (display-buffer-in-side-window (get-buffer-create "*sketch-key-hints*")
-                                        `((side . bottom)
-                                          (slot . -1)
-                                          (window-height . 10)))
-         t)
+        (unless show (delete-window win))
+      (let* ((window-sides-vertical t)
+            (buffer (get-buffer-create "*sketch-key-hints*"))
+            (win (display-buffer-in-side-window (get-buffer-create "*sketch-key-hints*")
+                                                   `((side . bottom)
+                                                     (slot . -1)
+                                                     (window-height . 10)))))
+        (set-window-dedicated-p win t)
+        (set-window-parameter win 'no-other-window t)
         (with-current-buffer buffer
           (insert
            "Stroke/Fill            Font              Edit               Toggle          Definition
------------------------------------------------------------------------------------------------
-[a]      : action      [fw]: font        [v]  : select      [tg]: grid      [D] Show definition
-[(C-u) c]: color       [fs]: font-size   [m]  : modify      [ts]: snap
+------------------------------------------------------------------------------------------------------------------
+[a]      : action      [fw]: font        [v]  : select      [tg]: grid      [D]      : Show definition
+[(C-u) c]: color       [fs]: font-size   [m]  : modify      [ts]: snap      [C-c C-c]: Quick insert to call buffer
 [w]      : width       [fc]: font-color  [d]  : delete      [tt]: toolbar
 [sd]     : dasharray                     [u/U]: undo/redo   [tc]: coords
 
-[down-mouse-1] main action, [down-mouse-3] add text")
+[down-mouse-1] main action, [down-mouse-3] add text ,[C-S drag-mouse-1] crop image")
           (setq cursor-type nil)
           (special-mode))))))
 
@@ -613,8 +624,8 @@ values"
     (cond (buffer
            (switch-to-buffer buffer)
            ;; TODO maybe immprove, i.e. always show on visit
-           (sketch-toggle-toolbar)
-           (sketch-toggle-key-hints)
+           (sketch-toggle-toolbar t)
+           (sketch-toggle-key-hints t)
            )
           (t
            (let ((call-buffer (current-buffer))
@@ -653,13 +664,6 @@ values"
   (add-hook 'kill-buffer-hook 'sketch-kill-key-hints nil t)
   (special-mode)
   (sketch-mode))
-
-(defun sketch-quit-window ()
-  "Quit sketch window. The window can be restores with ‘M-x sketch'"
-  (interactive)
-  (when (get-buffer "*sketch-toolbar*")
-    (kill-buffer "*sketch-toolbar*"))
-  (quit-window))
 
 (defun sketch-quit ()
   "Quit sketch-mode and kill buffers."
@@ -1516,36 +1520,6 @@ color."
       (goto-char (point-min))
       (special-mode))))
 
-(defun sketch-set-color ()
-  (interactive)
-  (pop-to-buffer "*sketch-color*" '(display-buffer-reuse-mode-window (mode . special-mode)))
-  (let ((inhibit-read-only t))
-    (dolist (x shr-color-html-colors-alist)
-      (let ((button-width (/ (* 8 x) 3))
-            (button-height x)
-            (s (number-to-string x)))
-        (insert-text-button s
-                            'action
-                            (lambda (button) (interactive)
-                              (setq sketch-font-size (string-to-number (button-label button)))
-                              (kill-buffer)
-                              (sketch-toolbar-refresh))
-                            'display (svg-image (let ((svg (svg-create button-width button-height)))
-                                                  (svg-rectangle svg 0 0 button-width button-height
-                                                                 :fill "white")
-                                                  (svg-text svg "Aa"
-                                                            :font-size button-height
-                                                            :font-family sketch-font
-                                                            :stroke "black"
-                                                            :fill "black"
-                                                            :x 4
-                                                            :y (- button-height 4))
-                                                  svg)))
-        (insert " ")
-        (insert s)
-        (insert "\n"))
-      (goto-char (point-min)))))
-
 (defun sketch-toggle-grid ()
   (interactive)
   (setq sketch-show-grid (if sketch-show-grid nil t))
@@ -1665,11 +1639,12 @@ then insert the image at the end"
       (goto-char (point-min)))))
 
 
-(defun sketch-toggle-toolbar ()
+(defun sketch-toggle-toolbar (&optional show)
+  "Toggle toolbar, when SHOW non-nil then show toolbar."
   (interactive)
   (let ((win (get-buffer-window "*sketch-toolbar*")))
     (if win
-        (delete-window win)
+        (unless arg (delete-window win))
       (let ((buffer (get-buffer-create "*sketch-toolbar*")))
         (set-window-dedicated-p
          (display-buffer-in-side-window (get-buffer-create "*sketch-toolbar*")
