@@ -117,6 +117,72 @@
 (declare-function undo-tree-redo "undo-tree" ())
 (declare-function undo-tree-undo "undo-tree" ())
 
+;;; Temporary code
+
+;; Overwrite default function until patch to core is applied
+(defun list-colors-display (&optional list buffer-name callback)
+  "Display names of defined colors, and show what they look like.
+If the optional argument LIST is non-nil, it should be a list of
+colors to display.  Otherwise, this command computes a list of
+colors that the current display can handle.  Customize
+`list-colors-sort' to change the order in which colors are shown.
+Type \\<help-mode-map>\\[revert-buffer] after customizing \
+`list-colors-sort' to redisplay colors in the new order.
+
+If the optional argument BUFFER-NAME is nil, it defaults to \"*Colors*\".
+
+If the optional argument CALLBACK is non-nil, it should be a
+function to call each time the user types RET or clicks on a
+color.  The function should accept a single argument, the color name."
+  (interactive)
+  (when (> (display-color-cells) 0)
+    (setq list (list-colors-duplicates (or list (defined-colors))))
+    (when list-colors-sort
+      ;; Schwartzian transform with `(color key1 key2 key3 ...)'.
+      (setq list (mapcar
+		  'car
+		  (sort (delq nil (mapcar
+				   (lambda (c)
+				     (let ((key (list-colors-sort-key
+						 (car c))))
+				       (when key
+					 (cons c (if (consp key) key
+						   (list key))))))
+				   list))
+			(lambda (a b)
+			  (let* ((a-keys (cdr a))
+				 (b-keys (cdr b))
+				 (a-key (car a-keys))
+				 (b-key (car b-keys)))
+			    ;; Skip common keys at the beginning of key lists.
+			    (while (and a-key b-key (equal a-key b-key))
+			      (setq a-keys (cdr a-keys) a-key (car a-keys)
+				    b-keys (cdr b-keys) b-key (car b-keys)))
+			    (cond
+			     ((and (numberp a-key) (numberp b-key))
+			      (< a-key b-key))
+			     ((and (stringp a-key) (stringp b-key))
+			      (string< a-key b-key)))))))))
+    (when (memq (display-visual-class) '(gray-scale pseudo-color direct-color))
+      ;; Don't show more than what the display can handle.
+      (let ((lc (nthcdr (1- (display-color-cells)) list)))
+	(if lc
+	    (setcdr lc nil)))))
+  (unless buffer-name
+    (setq buffer-name "*Colors*"))
+  (with-help-window buffer-name
+    (with-current-buffer standard-output
+      (erase-buffer)
+      (list-colors-print list callback)
+      (set-buffer-modified-p nil)
+      (setq truncate-lines t)
+      (setq-local list-colors-callback callback)
+      (setq revert-buffer-function 'list-colors-redisplay)))
+  (when callback
+    (pop-to-buffer buffer-name)
+    (message "Click on a color to select it.")))
+
+
 ;;; Rendering
 
 ;;; Some snippets for svg.el
@@ -1619,14 +1685,24 @@ then insert the image at the end"
 (defun sketch-toolbar-colors ()
   ;; STROKE COLOR
   (insert "STROKE COLOR: ")
-  (insert-text-button "   "
-                      'action
-                      (lambda (button) (interactive)
-                        (setq sketch-stroke-color (plist-get (button-get button 'face) :background)))
-                      'face (list :background
-                                  (alist-get sketch-stroke-color
-                                             shr-color-html-colors-alist
-                                             nil nil 'string=)))
+  (apply #'insert-text-button "   "
+         'help-echo
+         "Select from additional colors"
+         'action
+         (lambda (button) (interactive)
+           (let ((list-colors-sort 'hsv))
+             (list-colors-display (mapcar #'car shr-color-html-colors-alist)
+                                  nil
+                                  (lambda (c)
+                                    (setq sketch-stroke-color c)
+                                    (kill-buffer)
+                                    (sketch-toolbar-refresh)))))
+         (pcase sketch-fill-color
+           ("none" nil)
+           (_ (list 'face (when sketch-fill-color
+                            (list :background (alist-get sketch-stroke-color
+                                                         shr-color-html-colors-alist
+                                                         nil nil 'string=)))))))
   (insert " ")
   (insert (if (string= sketch-stroke-color "none")
               "none"
@@ -1663,9 +1739,17 @@ then insert the image at the end"
   ;; FILL COLOR
   (insert "FILL COLOR: ")
   (apply #'insert-text-button "   "
+         'help-echo
+         "Select from additional colors"
          'action
-         (lambda (_) (interactive)
-           (message sketch-fill-color))
+         (lambda (button) (interactive)
+           (let ((list-colors-sort 'hsv))
+             (list-colors-display (mapcar #'car shr-color-html-colors-alist)
+                                  nil
+                                  (lambda (c)
+                                    (setq sketch-fill-color c)
+                                    (kill-buffer)
+                                    (sketch-toolbar-refresh)))))
          (pcase sketch-fill-color
            ("none" nil)
            (_ (list 'face (when sketch-fill-color
