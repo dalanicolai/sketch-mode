@@ -305,38 +305,38 @@ If value of variable ‘sketch-show-labels' is ‘layer', create ..."
                       (+ (dom-attr node 'x) 2)
                       (+ (dom-attr node 'y)
                          (- (dom-attr node 'height) 2))))
-              ;; ('line (sketch-label-text-node
-              ;;         node
-              ;;         (dom-attr node 'x1)
-              ;;         (dom-attr node 'y1)))
-              ;; ((or 'circle 'ellipse)
-              ;;  (sketch-label-text-node
-              ;;   node
-              ;;   (dom-attr node 'cx)
-              ;;   (dom-attr node 'cy)))
-              ;; ((or 'polyline 'polygon)
-              ;;  (let ((coords (split-string
-              ;;                 (car (split-string (dom-attr node 'points) ","))
-              ;;                 nil
-              ;;                 t)))
-              ;;    (sketch-label-text-node
-              ;;     node
-              ;;     (string-to-number (car coords))
-              ;;     (string-to-number (cadr coords)))))
-              ;; ('text (sketch-label-text-node
-              ;;         node
-              ;;         (dom-attr node 'x)
-              ;;         (+ (dom-attr node 'y)
-              ;;            sketch-label-size)))
-              ;; ('g (let ((s (dom-attr node
-              ;;                        'transform)))
-              ;;       (string-match "translate\(\\([0-9]*\\)[, ]*\\([0-9]*\\)" s)
-              ;;       (let ((x (match-string 1 s))
-              ;;             (y (match-string 2 s)))
-              ;;         (sketch-label-text-node
-              ;;          node
-              ;;          x
-              ;;          y))))
+              ('line (sketch-label-text-node
+                      node
+                      (dom-attr node 'x1)
+                      (dom-attr node 'y1)))
+              ((or 'circle 'ellipse)
+               (sketch-label-text-node
+                node
+                (dom-attr node 'cx)
+                (dom-attr node 'cy)))
+              ((or 'polyline 'polygon)
+               (let ((coords (split-string
+                              (car (split-string (dom-attr node 'points) ","))
+                              nil
+                              t)))
+                 (sketch-label-text-node
+                  node
+                  (string-to-number (car coords))
+                  (string-to-number (cadr coords)))))
+              ('text (sketch-label-text-node
+                      node
+                      (dom-attr node 'x)
+                      (+ (dom-attr node 'y)
+                         sketch-label-size)))
+              ('g (let ((s (dom-attr node
+                                     'transform)))
+                    (string-match "translate\(\\([0-9]*\\)[, ]*\\([0-9]*\\)" s)
+                    (let ((x (match-string 1 s))
+                          (y (match-string 2 s)))
+                      (sketch-label-text-node
+                       node
+                       x
+                       y))))
               ))
           nodes))
     svg-labels))
