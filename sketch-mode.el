@@ -539,6 +539,7 @@ If value of variable ‘sketch-show-labels' is ‘layer', create ..."
                    ("tc" . sketch-toggle-coords)
                    ("l" . sketch-cycle-labels)
                    ("D" . sketch-show-definition)
+                   ("X" . sketch-show-xml)
                    ("u" . sketch-undo)
                    ("U" . sketch-redo)
                    ("S" . image-save)
@@ -1180,6 +1181,30 @@ returned by the function `sketch-parse-transform-string'"
                        'transform
                        (sketch-format-transform transform))
     (sketch-redraw object-def buffer)))
+
+(defun sketch-show-xml ()
+  ;; :transient 'transient--do-exit
+  (interactive)
+  (when (get-buffer "*sketch-toolbar*")
+    (kill-buffer "*sketch-toolbar*"))
+  (if-let (win (get-buffer-window "*sketch-xml*"))
+      (delete-window win)
+    (let ((buffer (get-buffer-create "*sketch-xml*"))
+          (xml (image-property (get-text-property (point) 'display)
+                               :data)))
+      (set-window-dedicated-p
+       (get-buffer-window (pop-to-buffer
+                           buffer
+                           `(display-buffer-in-side-window
+                             . ((side . right)
+                                (window-width . ,(funcall sketch-side-window-max-width))))))
+       t)
+      (window-resize (get-buffer-window buffer) -3 t)
+      (erase-buffer)
+      (with-current-buffer buffer
+        (insert xml)))
+    (sgml-mode)
+    (sgml-pretty-print (point-min) (point-max))))
 
 (define-minor-mode sketch-lisp-mode
   "Minor mode for svg lisp buffers."
