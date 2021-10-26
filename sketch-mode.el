@@ -122,7 +122,8 @@
 
 ;;; Temporary code
 
-;; Overwrite default function until patch to core is applied
+;; Overwrite default function until patch in
+;; https://debbugs.gnu.org/cgi/bugreport.cgi?bug=51371 to core is applied
 (defun list-colors-display (&optional list buffer-name callback)
   "Display names of defined colors, and show what they look like.
 If the optional argument LIST is non-nil, it should be a list of
@@ -521,7 +522,8 @@ If value of variable ‘sketch-show-labels' is ‘layer', create ..."
                    ([sketch triple-mouse-4] . sketch-rotate-by-5)
                    ([sketch triple-mouse-5] . sketch-rotate-by-min-5)
                    ("a" . sketch-set-action)
-                   ("c" . sketch-set-colors)
+                   ("cs" . sketch-set-colors)
+                   ("cf" . sketch-set-fill-color)
                    ("w" . sketch-set-width)
                    ("sd" . sketch-set-dasharray)
                    ("fw" . sketch-set-font-with-keyboard)
@@ -1467,6 +1469,10 @@ color."
       (set fn color)))
   (sketch-toolbar-refresh))
 
+(defun sketch-set-fill-color ()
+  (interactive)
+  (sketch-set-colors 4))
+
 (defun sketch-set-font-color ()
   (interactive)
   (sketch-set-colors 16))
@@ -1798,7 +1804,7 @@ then insert the image at the end"
   (interactive)
   (let ((win (get-buffer-window "*sketch-toolbar*")))
     (if win
-        (unless arg (delete-window win))
+        (unless show (delete-window win))
       (let ((buffer (get-buffer-create "*sketch-toolbar*")))
         (set-window-dedicated-p
          (display-buffer-in-side-window (get-buffer-create "*sketch-toolbar*")
