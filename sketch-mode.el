@@ -4,7 +4,7 @@
 
 ;; Author: D.L. Nicolai <dalanicolai@gmail.com>
 ;; Created: 17 Jul 2021
-;; Version: 1.0.3
+;; Version: 1.0.4
 
 ;; Keywords: multimedia
 ;; URL: https://github.com/dalanicolai/sketch-mode
@@ -70,10 +70,10 @@
 (defvar sketch-grid nil)
 (defvar sketch-show-grid t)
 (defvar sketch-background "white")
-(defvar sketch-grid-param 50)
+(defvar sketch-grid-param 100)
 (defvar sketch-minor-grid-param nil)
-(defvar sketch-minor-grid-freq 4)
-(defvar sketch-grid-colors '("gray" . "gray"))
+(defvar sketch-minor-grid-freq 5)
+(defvar sketch-grid-colors '("black" . "black"))
 (defvar sketch-default-stroke "black")
 (defvar sketch-snap-to-grid t)
 
@@ -83,6 +83,7 @@
 (defvar sketch-action 'line)
 (defvar sketch-stroke-color "Black")
 (defvar sketch-fill-color "none")
+(defvar sketch-opacity nil)
 (defvar sketch-stroke-width 1)
 (defvar sketch-stroke-dasharray nil)
 
@@ -90,7 +91,9 @@
 (defvar sketch-font-size 20)
 (defvar sketch-font-weight "normal")
 
+(defvar sketch-slider nil)
 
+(defvar sketch-bboxes nil)
 (defvar sketch-selection nil)
 
 (defvar sketch-active-layer 0)
@@ -116,6 +119,73 @@
 (declare-function evil-undo "evil-commands" ())
 (declare-function undo-tree-redo "undo-tree" ())
 (declare-function undo-tree-undo "undo-tree" ())
+
+;;; Temporary code
+
+;; Overwrite default function until patch in
+;; https://debbugs.gnu.org/cgi/bugreport.cgi?bug=51371 to core is applied
+(defun list-colors-display (&optional list buffer-name callback)
+  "Display names of defined colors, and show what they look like.
+If the optional argument LIST is non-nil, it should be a list of
+colors to display.  Otherwise, this command computes a list of
+colors that the current display can handle.  Customize
+`list-colors-sort' to change the order in which colors are shown.
+Type \\<help-mode-map>\\[revert-buffer] after customizing \
+`list-colors-sort' to redisplay colors in the new order.
+
+If the optional argument BUFFER-NAME is nil, it defaults to \"*Colors*\".
+
+If the optional argument CALLBACK is non-nil, it should be a
+function to call each time the user types RET or clicks on a
+color.  The function should accept a single argument, the color name."
+  (interactive)
+  (when (> (display-color-cells) 0)
+    (setq list (list-colors-duplicates (or list (defined-colors))))
+    (when list-colors-sort
+      ;; Schwartzian transform with `(color key1 key2 key3 ...)'.
+      (setq list (mapcar
+		  'car
+		  (sort (delq nil (mapcar
+				   (lambda (c)
+				     (let ((key (list-colors-sort-key
+						 (car c))))
+				       (when key
+					 (cons c (if (consp key) key
+						   (list key))))))
+				   list))
+			(lambda (a b)
+			  (let* ((a-keys (cdr a))
+				 (b-keys (cdr b))
+				 (a-key (car a-keys))
+				 (b-key (car b-keys)))
+			    ;; Skip common keys at the beginning of key lists.
+			    (while (and a-key b-key (equal a-key b-key))
+			      (setq a-keys (cdr a-keys) a-key (car a-keys)
+				    b-keys (cdr b-keys) b-key (car b-keys)))
+			    (cond
+			     ((and (numberp a-key) (numberp b-key))
+			      (< a-key b-key))
+			     ((and (stringp a-key) (stringp b-key))
+			      (string< a-key b-key)))))))))
+    (when (memq (display-visual-class) '(gray-scale pseudo-color direct-color))
+      ;; Don't show more than what the display can handle.
+      (let ((lc (nthcdr (1- (display-color-cells)) list)))
+	(if lc
+	    (setcdr lc nil)))))
+  (unless buffer-name
+    (setq buffer-name "*Colors*"))
+  (with-help-window buffer-name
+    (with-current-buffer standard-output
+      (erase-buffer)
+      (list-colors-print list callback)
+      (set-buffer-modified-p nil)
+      (setq truncate-lines t)
+      (setq-local list-colors-callback callback)
+      (setq revert-buffer-function 'list-colors-redisplay)))
+  (when callback
+    (pop-to-buffer buffer-name)
+    (message "Click on a color to select it.")))
+
 
 ;;; Rendering
 
@@ -185,7 +255,7 @@ PROPS is passed on to `create-image' as its PROPS list."
      (buffer-string))
    'svg t props))
 
-(defun sketch-insert-image (svg string &rest props)
+(defun sketch-insert-image (svg &optional string &rest props)
   "Insert SVG as an image at point.
 If the SVG is later changed, the image will also be updated."
   (let ((image (apply #'sketch-image svg props))
@@ -206,7 +276,6 @@ If the SVG is later changed, the image will also be updated."
              (mapconcat #'number-to-string
                         (number-sequence 0 (1- (length sketch-layers-list)))
                         ", "))))
-
 
 (defun sketch-labels ()
   "Create svg-group with svg text nodes for all elements in layer.
@@ -240,41 +309,49 @@ If value of variable ‘sketch-show-labels' is ‘layer', create ..."
                       (+ (dom-attr node 'x) 2)
                       (+ (dom-attr node 'y)
                          (- (dom-attr node 'height) 2))))
-              ;; ('line (sketch-label-text-node
-              ;;         node
-              ;;         (dom-attr node 'x1)
-              ;;         (dom-attr node 'y1)))
-              ;; ((or 'circle 'ellipse)
-              ;;  (sketch-label-text-node
-              ;;   node
-              ;;   (dom-attr node 'cx)
-              ;;   (dom-attr node 'cy)))
-              ;; ((or 'polyline 'polygon)
-              ;;  (let ((coords (split-string
-              ;;                 (car (split-string (dom-attr node 'points) ","))
-              ;;                 nil
-              ;;                 t)))
-              ;;    (sketch-label-text-node
-              ;;     node
-              ;;     (string-to-number (car coords))
-              ;;     (string-to-number (cadr coords)))))
-              ;; ('text (sketch-label-text-node
-              ;;         node
-              ;;         (dom-attr node 'x)
-              ;;         (+ (dom-attr node 'y)
-              ;;            sketch-label-size)))
-              ;; ('g (let ((s (dom-attr node
-              ;;                        'transform)))
-              ;;       (string-match "translate\(\\([0-9]*\\)[, ]*\\([0-9]*\\)" s)
-              ;;       (let ((x (match-string 1 s))
-              ;;             (y (match-string 2 s)))
-              ;;         (sketch-label-text-node
-              ;;          node
-              ;;          x
-              ;;          y))))
+              ('line (sketch-label-text-node
+                      node
+                      (dom-attr node 'x1)
+                      (dom-attr node 'y1)))
+              ((or 'circle 'ellipse)
+               (sketch-label-text-node
+                node
+                (dom-attr node 'cx)
+                (dom-attr node 'cy)))
+              ((or 'polyline 'polygon)
+               (let ((coords (split-string
+                              (car (split-string (dom-attr node 'points) ","))
+                              nil
+                              t)))
+                 (sketch-label-text-node
+                  node
+                  (string-to-number (car coords))
+                  (string-to-number (cadr coords)))))
+              ('text (sketch-label-text-node
+                      node
+                      (dom-attr node 'x)
+                      (+ (dom-attr node 'y)
+                         sketch-label-size)))
+              ('g (let ((s (dom-attr node
+                                     'transform)))
+                    (string-match "translate\(\\([0-9]*\\)[, ]*\\([0-9]*\\)" s)
+                    (let ((x (match-string 1 s))
+                          (y (match-string 2 s)))
+                      (sketch-label-text-node
+                       node
+                       x
+                       y))))
               ))
           nodes))
     svg-labels))
+
+(defun sketch-selections ()
+  (let* ((selections (sketch-group "Selections"))
+         (bbox (sketch-bbox-ex-transform (car (dom-by-id sketch-root (car sketch-selection)))))
+         (start-coords (cons (nth 0 bbox) (nth 1 bbox)))
+         (end-coords (cons (nth 2 bbox) (nth 3 bbox))))
+    (apply #'svg-rectangle selections `(,@(sketch--rectangle-coords start-coords end-coords)))
+    selections))
 
 
 (defun sketch-labels-list ()
@@ -308,7 +385,7 @@ If value of variable ‘sketch-show-labels' is ‘layer', create ..."
     label))
 
 (defun sketch--create-canvas (width height)
-  (setq sketch-canvas (sketch-create width height nil nil nil :stroke sketch-default-stroke))
+  (setq sketch-canvas (sketch-create width height nil nil nil))
   (apply #'svg-rectangle sketch-canvas 0 0 "100%" "100%"
          :id "bg"
          (when (or sketch-show-grid sketch-background)
@@ -330,7 +407,7 @@ If value of variable ‘sketch-show-labels' is ‘layer', create ..."
                                  (patternUnits . "userSpaceOnUse"))
                                (dom-node 'rect `((width . ,grid-param) (height . ,grid-param)
                                                  (x . 0) (y . 0)
-                                                 (stroke-width . 0.8) (stroke . ,(car sketch-grid-colors))
+                                                 (stroke-width . 0.4) (stroke . ,(car sketch-grid-colors))
                                                  (fill . "url(#minorGrid)"))))
                      ;; minor grid
                      (dom-node 'pattern
@@ -340,7 +417,7 @@ If value of variable ‘sketch-show-labels' is ‘layer', create ..."
                                  (patternUnits . "userSpaceOnUse"))
                                (dom-node 'rect `((width . ,sketch-minor-grid-param) (height . ,sketch-minor-grid-param)
                                                  (x . 0) (y . 0)
-                                                 (stroke-width . 0.4) (stroke . ,(cdr sketch-grid-colors))
+                                                 (stroke-width . 0.2) (stroke . ,(cdr sketch-grid-colors))
                                                  ,(when sketch-background
                                                     `(fill . ,sketch-background))))))))
 
@@ -416,7 +493,11 @@ If value of variable ‘sketch-show-labels' is ‘layer', create ..."
     (setq sketch-root (append sketch-root (list (nth layer sketch-layers-list)))))
   (setq sketch-svg (append sketch-canvas
                            (list sketch-root)
-                           (when sketch-show-labels (list (sketch-labels)))))
+                           (when sketch-show-labels (list (sketch-labels)))
+                           (when sketch-selection (list (sketch-selections)))))
+  (svg--def sketch-svg
+            '(style ((type . "text/css")) "<![CDATA[#Selections
+{ stroke: DeepSkyBlue; stroke-width: 2; fill: none; stroke-dasharray: 8 8; }]]>"))
   (when sketch-show-grid
     (svg--def sketch-svg (cdr sketch-grid))
     (svg--def sketch-svg (car sketch-grid)))
@@ -431,40 +512,78 @@ If value of variable ‘sketch-show-labels' is ‘layer', create ..."
 
 (define-key image-map "o" nil)
 
-(define-minor-mode sketch-mode
+(defvar sketch-mode-map
+  (let ((map (make-sparse-keymap))
+        (bindings `(([sketch down-mouse-1] . sketch-interactively)
+                   ([sketch mouse-3] . sketch-text-interactively)
+                   ([sketch C-S-drag-mouse-1] . sketch-crop)
+                   ([sketch S-down-mouse-1] . sketch-select)
+                   ([sketch S-down-mouse-1] . sketch-select)
+                   ([sketch triple-mouse-4] . sketch-rotate-by-5)
+                   ([sketch triple-mouse-5] . sketch-rotate-by-min-5)
+                   ("a" . sketch-set-action)
+                   ("cs" . sketch-set-colors)
+                   ("cf" . sketch-set-fill-color)
+                   ("w" . sketch-set-width)
+                   ("sd" . sketch-set-dasharray)
+                   ("fw" . sketch-set-font-with-keyboard)
+                   ("fs" . sketch-set-font-size-by-keyboard)
+                   ("fc" . sketch-set-font-color)
+                   ("v" . sketch-keyboard-select)
+                   ("m" . sketch-modify-object)
+                   ("d" . sketch-remove-object)
+                   ("tg" . sketch-toggle-grid)
+                   ("ts" . sketch-toggle-snap)
+                   ("tt" . sketch-toggle-toolbar)
+                   ("." . sketch-toggle-key-hints)
+                   ("tc" . sketch-toggle-coords)
+                   ("l" . sketch-cycle-labels)
+                   ("D" . sketch-show-definition)
+                   ("X" . sketch-show-xml)
+                   ("u" . sketch-undo)
+                   ("U" . sketch-redo)
+                   ("S" . image-save)
+                   (,(kbd "C-c C-c") . sketch-quick-insert-image)
+                   ("?" . sketch-help)
+                   ("Q" . sketch-quit))))
+    (dolist (b bindings)
+      (define-key map (car b) (cdr b)))
+    map))
+
+(define-derived-mode sketch-mode special-mode "sketch-mode"
   "Create svg images using the mouse.
 In sketch-mode buffer press \\[sketch-transient] to activate the
 transient."
-  :lighter "sketch-mode"
-  :keymap
-  `(
-    ([sketch down-mouse-1] . sketch-interactively)
-    ([sketch mouse-3] . sketch-text-interactively)
-    ([sketch C-S-drag-mouse-1] . sketch-crop)
-    ([sketch S-down-mouse-1] . sketch-select)
-    ("a" . sketch-set-action)
-    ("c" . sketch-set-colors)
-    ("w" . sketch-set-width)
-    ("sd" . sketch-set-dasharray)
-    ("fw" . sketch-set-font-with-keyboard)
-    ("fs" . sketch-set-font-size-by-keyboard)
-    ("fc" . sketch-set-font-color)
-    ("v" . sketch-keyboard-select)
-    ("m" . sketch-modify-object)
-    ("d" . sketch-remove-object)
-    ("tg" . sketch-toggle-grid)
-    ("ts" . sketch-toggle-snap)
-    ("tt" . sketch-toggle-toolbar)
-    ("." . sketch-toggle-key-hints)
-    ("tc" . sketch-toggle-coords)
-    ("l" . sketch-cycle-labels)
-    ("D" . sketch-show-definition)
-    ("u" . sketch-undo)
-    ("U" . sketch-redo)
-    ("S" . image-save)
-    (,(kbd "C-c C-c") . sketch-quick-insert-image)
-    ("?" . sketch-help)
-    ("Q" . sketch-quit))
+  ;; :lighter "sketch-mode"
+  ;; :keymap
+  ;; `(
+  ;;   ([sketch down-mouse-1] . sketch-interactively)
+  ;;   ([sketch mouse-3] . sketch-text-interactively)
+  ;;   ([sketch C-S-drag-mouse-1] . sketch-crop)
+  ;;   ([sketch S-down-mouse-1] . sketch-select)
+  ;;   ("a" . sketch-set-action)
+  ;;   ("c" . sketch-set-colors)
+  ;;   ("w" . sketch-set-width)
+  ;;   ("sd" . sketch-set-dasharray)
+  ;;   ("fw" . sketch-set-font-with-keyboard)
+  ;;   ("fs" . sketch-set-font-size-by-keyboard)
+  ;;   ("fc" . sketch-set-font-color)
+  ;;   ("v" . sketch-keyboard-select)
+  ;;   ("m" . sketch-modify-object)
+  ;;   ("d" . sketch-remove-object)
+  ;;   ("tg" . sketch-toggle-grid)
+  ;;   ("ts" . sketch-toggle-snap)
+  ;;   ("tt" . sketch-toggle-toolbar)
+  ;;   ("." . sketch-toggle-key-hints)
+  ;;   ("tc" . sketch-toggle-coords)
+  ;;   ("l" . sketch-cycle-labels)
+  ;;   ("D" . sketch-show-definition)
+  ;;   ("u" . sketch-undo)
+  ;;   ("U" . sketch-redo)
+  ;;   ("S" . image-save)
+  ;;   (,(kbd "C-c C-c") . sketch-quick-insert-image)
+  ;;   ("?" . sketch-help)
+  ;;   ("Q" . sketch-quit))
     ;; (,(kbd "C-c C-s") . sketch-transient))
   (with-no-warnings
     (if (boundp 'undo-tree-mode)
@@ -473,30 +592,42 @@ transient."
   (setq-local global-hl-line-mode nil)
   (blink-cursor-mode 0))
 
+(defun sketch-quit-side-windows ()
+  "Quit sketch window. The window can be restores with ‘M-x sketch'"
+  (when (eq major-mode 'sketch-mode)
+    (when (get-buffer "*sketch-toolbar*")
+      (kill-buffer "*sketch-toolbar*"))
+    (when (get-buffer "*sketch-key-hints*")
+      (kill-buffer "*sketch-key-hints*"))))
+
+(add-hook 'quit-window-hook 'sketch-quit-side-windows)
+
 ;; TODO format/propertize key hints
-(defun sketch-toggle-key-hints ()
+(defun sketch-toggle-key-hints (&optional show)
+  "Toggle key-hints, when SHOW non-nil then show key-hints."
   (interactive)
   (let ((win (get-buffer-window "*sketch-key-hints*")))
     (if win
-        (delete-window win)
-      (let ((window-sides-vertical t)
-            (buffer (get-buffer-create "*sketch-key-hints*")))
-        (set-window-dedicated-p
-         (display-buffer-in-side-window (get-buffer-create "*sketch-key-hints*")
-                                        `((side . bottom)
-                                          (slot . -1)
-                                          (window-height . 10)))
-         t)
+        (unless show (delete-window win))
+      (let* ((window-sides-vertical t)
+            (buffer (get-buffer-create "*sketch-key-hints*"))
+            (win (display-buffer-in-side-window (get-buffer-create "*sketch-key-hints*")
+                                                   `((side . bottom)
+                                                     (slot . -1)
+                                                     (window-height . 11)))))
+        (set-window-dedicated-p win t)
+        (set-window-parameter win 'no-other-window t)
         (with-current-buffer buffer
           (insert
-           "Stroke/Fill            Font              Edit               Toggle          Definition
------------------------------------------------------------------------------------------------
-[a]      : action      [fw]: font        [v]  : select      [tg]: grid      [D] Show definition
-[(C-u) c]: color       [fs]: font-size   [m]  : modify      [ts]: snap
-[w]      : width       [fc]: font-color  [d]  : delete      [tt]: toolbar
-[sd]     : dasharray                     [u/U]: undo/redo   [tc]: coords
+           "Stroke/Fill           Font              Edit                 Toggle          Definition
+-------------------------------------------------------------------------------------------------------------------------------
+[a] : action          [fw]: font        [m]  : modify object [tg]: grid      [D]      : Show definition
+[cs]: stroke-color    [fs]: font-size   [v]  : select        [ts]: snap      [X]      : Show xml
+[cf]: fill-color      [fc]: font-color  [d]  : delete        [tt]: toolbar   [C-c C-c]: Quick insert to call buffer
+[w] : width                             [u/U]: undo/redo     [tc]: coords
+[sd]: dasharray
 
-[down-mouse-1] main action, [down-mouse-3] add text")
+[down-mouse-1] main action, [down-mouse-3] add text ,[C-S drag-mouse-1] crop image, [sketch triple-mouse-4/5] rotate selection")
           (setq cursor-type nil)
           (special-mode))))))
 
@@ -515,8 +646,8 @@ values"
     (cond (buffer
            (switch-to-buffer buffer)
            ;; TODO maybe immprove, i.e. always show on visit
-           (sketch-toggle-toolbar)
-           (sketch-toggle-key-hints)
+           (sketch-toggle-toolbar t)
+           (sketch-toggle-key-hints t)
            )
           (t
            (let ((call-buffer (current-buffer))
@@ -524,7 +655,7 @@ values"
                  (height (if arg (cdr sketch-size) (read-number "Enter height: "))))
              (switch-to-buffer (get-buffer-create "*sketch*"))
              (setq sketch-action 'line)
-             (setq sketch-grid-param (if arg 50 (read-number "Enter grid parameter (enter 0 for no grid): ")))
+             (setq sketch-grid-param (if arg sketch-grid-param (read-number "Enter grid parameter (enter 0 for no grid): ")))
              (sketch--init width height sketch-grid-param)
              (when sketch-show-coords
                (setq sketch-coordless-mode-line-format mode-line-format)
@@ -555,13 +686,6 @@ values"
   (add-hook 'kill-buffer-hook 'sketch-kill-key-hints nil t)
   (special-mode)
   (sketch-mode))
-
-(defun sketch-quit-window ()
-  "Quit sketch window. The window can be restores with ‘M-x sketch'"
-  (interactive)
-  (when (get-buffer "*sketch-toolbar*")
-    (kill-buffer "*sketch-toolbar*"))
-  (quit-window))
 
 (defun sketch-quit ()
   "Quit sketch-mode and kill buffers."
@@ -618,23 +742,27 @@ VEC should be a cons or a list containing only number elements."
                                    (when sketch-stroke-color
                                      (list :stroke sketch-stroke-color))
                                    (when sketch-fill-color
-                                     (list :fill sketch-fill-color)))
-                         (list :stroke-width
-                               sketch-stroke-width
-                               :stroke
-                               sketch-stroke-color
-                               :fill
-                               sketch-fill-color
-                               :stroke-dasharray
-                               sketch-stroke-dasharray
-                               ;; :marker-end (if args (pcase (transient-arg-value "--marker=" args)
-                               ;;                        ("arrow" "url(#arrow)")
-                               ;;                        ("dot" "url(#dot)")
-                               ;;                        (_ "none"))
-                               ;;               (if sketch-include-end-marker
-                               ;;                   "url(#arrow)"
-                               ;;                 "none"))
-                               )))
+                                     (list :fill sketch-fill-color))
+                                   (when sketch-opacity
+                                     (list :opacity sketch-opacity)))
+                         (append (list :stroke-width
+                                       sketch-stroke-width
+                                       :stroke
+                                       sketch-stroke-color
+                                       :fill
+                                       sketch-fill-color
+                                       :stroke-dasharray
+                                       sketch-stroke-dasharray)
+                                 (when sketch-opacity
+                                   (list :opacity sketch-opacity))
+                                ;; :marker-end (if args (pcase (transient-arg-value "--marker=" args)
+                                ;;                        ("arrow" "url(#arrow)")
+                                ;;                        ("dot" "url(#dot)")
+                                ;;                        (_ "none"))
+                                ;;               (if sketch-include-end-marker
+                                ;;                   "url(#arrow)"
+                                ;;                 "none"))
+                                )))
          (start-command-and-coords (pcase sketch-action
                                      ('line (list 'svg-line
                                                   (car start-coords) (cdr start-coords)
@@ -645,11 +773,12 @@ VEC should be a cons or a list containing only number elements."
                                                     (car start-coords) (cdr start-coords)
                                                     (sketch--circle-radius start-coords start-coords)))
                                      ('ellipse `(svg-ellipse ,@(sketch--ellipse-coords start-coords start-coords)))
-                                     (var (list (pcase var
-                                                  ((or 'polyline 'freehand) 'svg-polyline)
-                                                  ('polygon 'svg-polygon))
-                                                points))))
-         (label (unless (memq sketch-action '(move translate))
+                                     ((or 'polyline 'polygon 'freehand)
+                                      (list (pcase sketch-action
+                                              ((or 'polyline 'freehand) 'svg-polyline)
+                                              ('polygon 'svg-polygon))
+                                            points))))
+         (label (unless (memq sketch-action '(select move translate))
                   (sketch-create-label sketch-action))))
     (pcase sketch-action
       ('text (let ((text (read-string "Enter text: ")))
@@ -659,14 +788,15 @@ VEC should be a cons or a list containing only number elements."
                       :x (car start-coords)
                       :y (cdr start-coords)
                       :id label object-props)))
-      (_ (unless (memq sketch-action '(move translate))
+      (_ (unless (memq sketch-action '(select move translate))
            (apply (car start-command-and-coords)
                   (nth sketch-active-layer sketch-layers-list)
                   `(,@(cdr start-command-and-coords) ,@object-props :id ,label)))
-         (let* ((node (car (dom-by-id (nth sketch-active-layer sketch-layers-list)
-                                      (if (memq sketch-action '(move translate))
-                                          (car sketch-selection)
-                                        label))))
+         (let* ((node (unless (eq sketch-action 'select)
+                        (car (dom-by-id (nth sketch-active-layer sketch-layers-list)
+                                        (if (memq sketch-action '(move translate))
+                                            (car sketch-selection)
+                                          label)))))
                 (translate-start (dom-attr node 'transform)))
            (track-mouse
              (pcase sketch-action
@@ -763,7 +893,19 @@ VEC should be a cons or a list containing only number elements."
                                                          (car end-coords)
                                                          (cdr end-coords)))
                     (sketch-maybe-update-modeline))))
-               )))))
+
+               ('select (let* ((coords (posn-object-x-y (event-start event)))
+                               (bboxes (seq-filter (lambda (x)
+                                                     (sketch-within-bbox-ex-transform-p coords (cdr x)))
+                                                   sketch-bboxes)))
+                          (let ((next-selections (member (car sketch-selection) (mapcar #'car bboxes))))
+                            (setq sketch-selection (if next-selections
+                                                       (when-let (x (cadr next-selections)) (list x))
+                                                     (when bboxes (list (caar bboxes)))))))))))))
+    (setq sketch-bboxes (mapcar (lambda (x)
+                                  (cons (dom-attr x 'id)
+                                        (sketch-bbox-ex-transform x)))
+                                (dom-children (nth sketch-active-layer sketch-layers-list))))
     (when-let (buf (get-buffer "*sketch-root*"))
       (sketch-update-lisp-window sketch-root buf))
     (sketch-redraw)))
@@ -823,40 +965,188 @@ selection shows all object in sketch."
     (cl-incf (alist-get coord props) amount))
   (sketch-redraw object-def buffer))
 
-(defun sketch-parse-transform-value (value)
-  (let ((transforms (mapcar (lambda (val)
-                              (split-string val "[(,)]" t))
-                            (split-string value))))
-    (mapcar (lambda (x)
-              (cons (intern (car x)) (mapcar (lambda (val)
-                                               (string-to-number val))
-                                             (cdr x))))
-            transforms)))
+(defun sketch-parse-transform-string (value)
+  "Parse SVG transform VALUE (string) to alist.
+The elements of the alist cons-cell consisting of the
+transform (symbol) and its values (list)."
+  (mapcar (lambda (p)
+            (cons (intern (car p))
+                  (mapcar #'string-to-number (split-string (cadr p) "[, ]" t))))
+          (seq-partition (split-string value "[()\n]+" t " *") 2)))
 
-(defun sketch-format-transfrom-value (value)
-  (string-join (mapcar (lambda (x) (concat (symbol-name (car x))
-                                           "("
-                                           (number-to-string (cadr x))
-                                           (if-let (y (caddr x))
-                                               (concat "," (number-to-string y)))
-                                           ")"))
-                       value)
-               " "))
+(defun sketch-format-transform (transform-alist)
+  "Format TRANSFORM-ALIST to transform string.
+The TRANSFORM-ALIST generally is a transform of the an alist
+returned by the function `sketch-parse-transform-string'"
+  (mapconcat #'identity
+             (mapcar (lambda (c)
+                       (format "%s(%s)"
+                               (symbol-name (car c))
+                               (mapconcat #'number-to-string (cdr c) " ")))
+                     transform-alist)
+             "\n"))
+
+(defun sketch-prop-vals (props &rest keys)
+  (mapcar (lambda (p) (alist-get p props)) keys))
+
+(defun sketch-bbox-ex-transform (object)
+  (pcase object
+    (`(line ,props)
+     (sketch-prop-vals props
+                       'x1 'y1 'x2 'y2))
+
+    (`(rect ,props)
+     (pcase-let ((`(,x ,y ,w ,h)
+                  (sketch-prop-vals props 'x 'y 'width 'height)))
+       (list x y (+ x w) (+ y h))))
+
+    (`(circle ,props)
+     (pcase-let ((`(,cx ,cy ,r) (sketch-prop-vals props
+                                                'cx 'cy 'r)))
+       (print (list (- cx r) (+ cx r) (- cy r) (+ cy r)))))
+
+    (`(ellipse ,props)
+     (pcase-let ((`(,cx ,cy ,rx ,ry) (sketch-prop-vals props
+                                                     'cx 'cy 'rx 'ry)))
+       (print (list (- cx rx) (+ cx rx) (- cy ry) (+ cy ry)))))
+    (`(polyline ,props)
+     (pcase-let ((`(,points) (sketch-prop-vals props 'points)))
+       (let ((coords (mapcar (lambda (x)
+                               (mapcar #'string-to-number (split-string x)))
+                             (split-string points ", " t))))
+         (list (apply #'min (mapcar #'car coords))
+               (apply #'min (mapcar #'cadr coords))
+               (apply #'max (mapcar #'car coords))
+               (apply #'max (mapcar #'cadr coords))))))
+    (`(polygon ,props) ; body identical to polyline
+     (pcase-let ((`(,points) (sketch-prop-vals props 'points)))
+       (let ((coords (mapcar (lambda (x)
+                               (mapcar #'string-to-number (split-string x)))
+                             (split-string points ", " t))))
+         (list (apply #'min (mapcar #'car coords))
+               (apply #'min (mapcar #'cadr coords))
+               (apply #'max (mapcar #'car coords))
+               (apply #'max (mapcar #'cadr coords))))))
+    (`(text ,props ,text)
+     (pcase-let ((`(,x ,y ,fs) (sketch-prop-vals props
+                                                 'x 'y 'font-size))
+                 (text-length (length text)))
+       (list x y (* text-length (/ fs 1.6)) fs)))))
+
+(defun sketch-rot-2d (x y angle &optional deg)
+  (let ((angle (if deg
+                   (degrees-to-radians deg)
+                 angle)))
+    (cons (- (* x (cos angle)) (* y (sin angle)))
+          (+ (* x (sin angle)) (* y (cos angle))))))
+
+(defun sketch--object-bbox-transform (object)
+  (let* ((area (sketch-bbox-ex-transform object))
+         (transform (sketch-parse-transform-string (dom-attr object 'transform)))
+         (x1 (cl-first area))
+         (y1 (cl-second area))
+         (x2 (cl-third area))
+         (y2 (cl-fourth area))
+         (cx (/ (+ x1 x2) 2)) ; object x center
+         (cy (/ (+ y1 y2) 2))
+         (x-rad (abs (- cx x1))) ; object half-width
+         (y-rad (abs (- cy y1))))
+    (dolist (t-vals transform) ;; TODO maybe order first (rotate before
+                               ;; translate etc.), check how this is implemented in
+                               ;; SVG
+      (pcase (car t-vals)
+        ('translate (cl-incf  (cl-second t-vals))
+                    (when (cl-third t-vals)
+                      (cl-incf y1 (cl-third t-vals))))
+
+        ;; TODO correct following comment and 'case' (code); bbox should be
+        ;; tightest fitting rectangle see URL
+        ;; `https://svgwg.org/svg2-draft/coords.html#BoundingBoxes'
+
+        ;; To determine the bounding box after a rotation, we separate the
+        ;; rotation in a translation of the center (rotation about a 'pivot) of
+        ;; the bbox plus a rotation of the bbox around its center. Because the
+        ;; bounding box always stays 'upright' (a mouse drag rectangle never
+        ;; rotates), we can get the new bounding box by considering how much its
+        ;; grows/expands through rotation around its 'translated' center.
+        ('rotate (let* ((rad (degrees-to-radians (nth 1 t-vals)))
+                        (px (or (nth 2 t-vals) 0)) ; pivot x position
+                        (py (or (nth 3 t-vals) 0))
+                        (vpx (- cx px)) ; vector pivot to center
+                        (vpy (- cy py))
+                        (vp-new (sketch-rot-2d vpx vpy rad))
+                        (c-new (cons (+ px (car vp-new)) (+ py (cdr vp-new)))) ; new center
+                        (vx x-rad) ;vector-x center to bbox corner
+                        (vy y-rad)
+                        (v-new (sketch-rot-2d vx vy rad)))
+                   (print vp-new)
+                   (print (list (- (car c-new) (car v-new)) (- (cdr c-new) (cdr v-new))
+                                (+ (car c-new) (car v-new)) (+ (cdr c-new) (cdr v-new))))))
+        ('scale (let* ((new-x-rad (* (nth 1 t-vals) x-rad))
+                       (new-y-rad (when-let (sy (nth 2 t-vals))
+                                    (* (nth 2 t-vals) y-rad)))
+                       (new-y1 (if new-y-rad (- cy new-y-rad) y1))
+                       (new-y2 (if new-y-rad (+ cy new-y-rad) y2)))
+                  (print (list (- cx new-x-rad) new-y1 (+ cx new-x-rad) new-y2))))))))
+
+
+(defun sketch-within-bbox-ex-transform-p (coords bbox)
+  (and (or (< (nth 0 bbox) (car coords) (nth 2 bbox))
+           (< (nth 2 bbox) (car coords) (nth 1 bbox)))
+       (or (< (nth 1 bbox) (cdr coords) (nth 3 bbox))
+           (< (nth 3 bbox) (cdr coords) (nth 1 bbox)))))
+
+
+(defun sketch--svg-rotate (dt pivot &optional object-def)
+  (interactive)
+  (let* ((transform (sketch-parse-transform-string
+                    (or (dom-attr object-def 'transform)
+                        "rotate(0 0 0)")))
+         (bbox (sketch-bbox-ex-transform object-def))
+        (pivot (if (eq pivot 'center)
+                   (cons (/ (+ (nth 2 bbox) (nth 0 bbox)) 2)
+                         (/ (+ (nth 3 bbox) (nth 1 bbox)) 2))
+               pivot)))
+    (cl-decf (cl-first (alist-get 'rotate transform)) dt)
+    (when pivot
+      (setf (cl-second (alist-get 'rotate transform)) (car pivot))
+      (setf (cl-third (alist-get 'rotate transform)) (cdr pivot)))
+    (dom-set-attribute object-def
+                       'transform
+                       (sketch-format-transform transform))))
+
+;; (defun sketch-rotate (deg &optional lisp-buffer)
+;;   (interactive)
+;;   (let ((node (car (dom-by-id sketch-svg (car sketch-selection)))))
+;;     (sketch--svg-rotate deg 'center node)
+;;     (sketch-redraw)
+;;     (when lisp-buffer
+;;       (sketch-update-lisp-window))))
+
+(defun sketch-rotate-by-5 (&optional arg)
+  (interactive)
+  (let ((node (car (dom-by-id sketch-svg (car sketch-selection)))))
+    (sketch--svg-rotate (if arg -5 5) 'center node)
+    (sketch-redraw)))
+
+(defun sketch-rotate-by-min-5 ()
+  (interactive)
+  (sketch-rotate-by-5 t))
 
 (defun sketch--svg-translate (dx dy &optional object-def)
   (interactive)
-  (let ((transform (sketch-parse-transform-value
+  (let ((transform (sketch-parse-transform-string
                     (or (dom-attr object-def 'transform)
                         "translate(0,0)"))))
     (cl-decf (cl-first (alist-get 'translate transform)) dx)
     (cl-decf (cl-second (alist-get 'translate transform)) dy)
     (dom-set-attribute object-def
                        'transform
-                       (sketch-format-transfrom-value transform))))
+                       (sketch-format-transform transform))))
 
 (defun sketch--svg-move (dx dy &optional object-def start-node)
   (interactive)
-  (let ((transform (sketch-parse-transform-value
+  (let ((transform (sketch-parse-transform-string
                     (if start-node
                         start-node
                       "translate(0,0)"))))
@@ -872,11 +1162,11 @@ selection shows all object in sketch."
       (cl-incf (cl-second (alist-get 'translate transform)) dy)))
     (dom-set-attribute object-def
                        'transform
-                       (sketch-format-transfrom-value transform))
+                       (sketch-format-transform transform))
     start-node))
 
 (defun sketch-group-scale (buffer object-def direction &optional fast)
-  (let ((transform (sketch-parse-transform-value
+  (let ((transform (sketch-parse-transform-string
                     (dom-attr object-def
                               'transform)))
         (amount (if fast
@@ -889,8 +1179,32 @@ selection shows all object in sketch."
       ('down (cl-decf (car (alist-get 'scale transform)) amount)))
     (dom-set-attribute object-def
                        'transform
-                       (sketch-format-transfrom-value transform))
+                       (sketch-format-transform transform))
     (sketch-redraw object-def buffer)))
+
+(defun sketch-show-xml ()
+  ;; :transient 'transient--do-exit
+  (interactive)
+  (when (get-buffer "*sketch-toolbar*")
+    (kill-buffer "*sketch-toolbar*"))
+  (if-let (win (get-buffer-window "*sketch-xml*"))
+      (delete-window win)
+    (let ((buffer (get-buffer-create "*sketch-xml*"))
+          (xml (image-property (get-text-property (point) 'display)
+                               :data)))
+      (set-window-dedicated-p
+       (get-buffer-window (pop-to-buffer
+                           buffer
+                           `(display-buffer-in-side-window
+                             . ((side . right)
+                                (window-width . ,(funcall sketch-side-window-max-width))))))
+       t)
+      (window-resize (get-buffer-window buffer) -3 t)
+      (erase-buffer)
+      (with-current-buffer buffer
+        (insert xml)))
+    (sgml-mode)
+    (sgml-pretty-print (point-min) (point-max))))
 
 (define-minor-mode sketch-lisp-mode
   "Minor mode for svg lisp buffers."
@@ -1180,6 +1494,10 @@ color."
       (set fn color)))
   (sketch-toolbar-refresh))
 
+(defun sketch-set-fill-color ()
+  (interactive)
+  (sketch-set-colors 4))
+
 (defun sketch-set-font-color ()
   (interactive)
   (sketch-set-colors 16))
@@ -1270,37 +1588,8 @@ color."
         (insert " ")
         (insert s)
         (insert "\n"))
-      (goto-char (point-min)))))
-
-(defun sketch-set-color ()
-  (interactive)
-  (pop-to-buffer "*sketch-color*" '(display-buffer-reuse-mode-window (mode . special-mode)))
-  (let ((inhibit-read-only t))
-    (dolist (x shr-color-html-colors-alist)
-      (let ((button-width (/ (* 8 x) 3))
-            (button-height x)
-            (s (number-to-string x)))
-        (insert-text-button s
-                            'action
-                            (lambda (button) (interactive)
-                              (setq sketch-font-size (string-to-number (button-label button)))
-                              (kill-buffer)
-                              (sketch-toolbar-refresh))
-                            'display (svg-image (let ((svg (svg-create button-width button-height)))
-                                                  (svg-rectangle svg 0 0 button-width button-height
-                                                                 :fill "white")
-                                                  (svg-text svg "Aa"
-                                                            :font-size button-height
-                                                            :font-family sketch-font
-                                                            :stroke "black"
-                                                            :fill "black"
-                                                            :x 4
-                                                            :y (- button-height 4))
-                                                  svg)))
-        (insert " ")
-        (insert s)
-        (insert "\n"))
-      (goto-char (point-min)))))
+      (goto-char (point-min))
+      (special-mode))))
 
 (defun sketch-toggle-grid ()
   (interactive)
@@ -1404,6 +1693,119 @@ then insert the image at the end"
 
 
 ;;; Toolbar
+(defvar sketch-toolbar-mode-map
+  (let ((map (make-sparse-keymap))
+        (bindings `(([slider down-mouse-1] . sketch-set-slider)
+                   ("a" . sketch-set-action)
+                   ("cs" . sketch-set-colors)
+                   ("cf" . sketch-set-fill-color)
+                   ("w" . sketch-set-width)
+                   ("sd" . sketch-set-dasharray)
+                   ("fw" . sketch-set-font-with-keyboard)
+                   ("fs" . sketch-set-font-size-by-keyboard)
+                   ("fc" . sketch-set-font-color)
+                   ("v" . sketch-keyboard-select)
+                   ("m" . sketch-modify-object)
+                   ("d" . sketch-remove-object)
+                   ("tg" . sketch-toggle-grid)
+                   ("ts" . sketch-toggle-snap)
+                   ("tt" . sketch-toggle-toolbar)
+                   ("." . sketch-toggle-key-hints)
+                   ("tc" . sketch-toggle-coords)
+                   ("l" . sketch-cycle-labels)
+                   ("D" . sketch-show-definition)
+                   ("X" . sketch-show-xml)
+                   ("S" . image-save)
+                   ("?" . sketch-help)
+                   ("Q" . sketch-quit))))
+    (dolist (b bindings)
+      (define-key map (car b) (cdr b)))
+    map))
+
+  ;; (with-no-warnings
+  ;;   (if (boundp 'undo-tree-mode)
+  ;;       (undo-tree-mode))
+  ;;   (buffer-enable-undo))
+  ;; (setq-local global-hl-line-mode nil)
+  ;; (blink-cursor-mode 0))
+
+(define-derived-mode sketch-toolbar-mode special-mode "Skecth-Toolbar"
+  "Major mode for sketch toolbar")
+
+(defun sketch-set-slider (event)
+  (interactive "@e")
+  (let* ((start (event-start event))
+         (start-coords (posn-object-x-y start))
+         (h (default-font-height))
+         (slide-pixel-width (print (- 220 (* 2 h)))))
+    (setq sketch-opacity (/ (float (- (car start-coords) h)) slide-pixel-width))
+    (track-mouse
+      (let ((event (read-event)))
+        (while (not (memq (car event) '(mouse-1 drag-mouse-1)))
+            (setq event (read-event))
+            (let* ((end (event-start event))
+                   (end-x-coord (car (posn-object-x-y end))))
+              (when (< h end-x-coord (- 220 h))
+                (setq sketch-opacity (/ (float (- end-x-coord h)) slide-pixel-width))))
+            (sketch-slider-refresh))
+        (let* ((end (event-end event))
+               (end-x-coord (car (posn-object-x-y end))))
+          (setq sketch-opacity (/ (print (pcase (- end-x-coord h)
+                                           ((pred (>= h)) 0)
+                                           ((pred (<= slide-pixel-width)) slide-pixel-width)
+                                           (var (float var))))
+                                  slide-pixel-width))
+          (sketch-slider-refresh))))))
+
+(defun sketch-slider-refresh ()
+  (pcase-let ((`(,w ,h ,s ,e) (dom-attr sketch-slider :image)))
+    (when (and s
+	             (buffer-live-p (marker-buffer s)))
+      (with-current-buffer (print (marker-buffer s))
+          (let ((inhibit-read-only t))
+            (replace-region-contents s e (lambda () (concat "OPACITY: "
+                                                            (format (if sketch-opacity
+                                                                        "%.2f"
+                                                                      "%s"
+                                                                      )
+                                                                    sketch-opacity)
+                                                            "\n ")))
+	          (put-text-property (1- e) e 'display (svg-image 
+                                                (let* ((w 220)
+                                                       (h (default-font-height))
+                                                       (half-h (/ h 2))
+                                                       (level (if-let (x sketch-opacity) x 0))
+                                                       (slider-pos (+ h (* (- w (* 2 h)) level))))
+                                                  (setq sketch-slider (svg-create w h :stroke "black"))
+                                                  (svg-circle sketch-slider half-h half-h (- half-h 4) :stroke "black" :fill "black")
+                                                  (svg-rectangle sketch-slider 0 0 w h :stroke "black ":fill "white" :fill-opacity sketch-opacity)
+                                                  (svg-line sketch-slider h (/ h 2) (- w h) (/ h 2))
+                                                  (when sketch-opacity
+                                                    (svg-line sketch-slider slider-pos (* 0.2 h) slider-pos (* 0.8 h) :stroke-width 3))
+                                                  (dom-set-attribute sketch-slider :image (list w h s e))
+                                                  sketch-slider)
+                                                :map `(((rect . ((0 . 0) . (,w . ,h)))
+                                                        slider
+                                                        ,(append '(pointer
+                                                                   hand)))))))))))
+;; (defun sketch-set-slider (event)
+;;   (interactive "@e")
+;;   (let* ((start (event-start event))
+;;          (start-coords (posn-object-x-y start)))
+;;     (setq sketch-opacity (/ (float (- (car start-coords) 10)) 200)))
+;;   (sketch-toolbar-refresh))
+  ;; (track-mouse
+  ;;      (let ((event (read-event)))
+  ;;        (while (not (memq (car event) '(mouse-1 drag-mouse-1)))
+  ;;          (let* ((end (event-start event))
+  ;;                 (end-coords (posn-object-x-y end)))
+  ;;            (setq sketch-opacity (/ (float (- (car end-coords) 10)) 200))
+  ;;            (sketch-toolbar-refresh)))
+  ;;        (let* ((end (event-end event))
+  ;;               (end-coords (posn-object-x-y end)))
+  ;;          (setq sketch-opacity (/ (float (- (car end-coords) 10)) 200))
+  ;;          (sketch-toolbar-refresh)))))
+
 (defun sketch-toolbar-refresh ()
   (with-current-buffer (get-buffer "*sketch-toolbar*")
     (let ((inhibit-read-only t))
@@ -1418,14 +1820,16 @@ then insert the image at the end"
       (sketch-toolbar-toggles)
       (insert "\n\n")
       (sketch-toolbar-font)
-      (goto-char (point-min)))))
+      (goto-char (point-min))
+      (sketch-toolbar-mode))))
 
 
-(defun sketch-toggle-toolbar ()
+(defun sketch-toggle-toolbar (&optional show)
+  "Toggle toolbar, when SHOW non-nil then show toolbar."
   (interactive)
   (let ((win (get-buffer-window "*sketch-toolbar*")))
     (if win
-        (delete-window win)
+        (unless show (delete-window win))
       (let ((buffer (get-buffer-create "*sketch-toolbar*")))
         (set-window-dedicated-p
          (display-buffer-in-side-window (get-buffer-create "*sketch-toolbar*")
@@ -1441,14 +1845,24 @@ then insert the image at the end"
 (defun sketch-toolbar-colors ()
   ;; STROKE COLOR
   (insert "STROKE COLOR: ")
-  (insert-text-button "   "
-                      'action
-                      (lambda (button) (interactive)
-                        (setq sketch-stroke-color (plist-get (button-get button 'face) :background)))
-                      'face (list :background
-                                  (alist-get sketch-stroke-color
-                                             shr-color-html-colors-alist
-                                             nil nil 'string=)))
+  (apply #'insert-text-button "   "
+         'help-echo
+         "Select from additional colors"
+         'action
+         (lambda (button) (interactive)
+           (let ((list-colors-sort 'hsv))
+             (list-colors-display (mapcar #'car shr-color-html-colors-alist)
+                                  nil
+                                  (lambda (c)
+                                    (setq sketch-stroke-color c)
+                                    (kill-buffer)
+                                    (sketch-toolbar-refresh)))))
+         (pcase sketch-fill-color
+           ("none" nil)
+           (_ (list 'face (when sketch-fill-color
+                            (list :background (alist-get sketch-stroke-color
+                                                         shr-color-html-colors-alist
+                                                         nil nil 'string=)))))))
   (insert " ")
   (insert (if (string= sketch-stroke-color "none")
               "none"
@@ -1485,9 +1899,17 @@ then insert the image at the end"
   ;; FILL COLOR
   (insert "FILL COLOR: ")
   (apply #'insert-text-button "   "
+         'help-echo
+         "Select from additional colors"
          'action
-         (lambda (_) (interactive)
-           (message sketch-fill-color))
+         (lambda (button) (interactive)
+           (let ((list-colors-sort 'hsv))
+             (list-colors-display (mapcar #'car shr-color-html-colors-alist)
+                                  nil
+                                  (lambda (c)
+                                    (setq sketch-fill-color c)
+                                    (kill-buffer)
+                                    (sketch-toolbar-refresh)))))
          (pcase sketch-fill-color
            ("none" nil)
            (_ (list 'face (when sketch-fill-color
@@ -1523,7 +1945,45 @@ then insert the image at the end"
           (insert " ")
         (insert "\n\n")
         (setq counter 0))))
-  (insert (propertize "More colors? Press (C-u) c" 'face 'bold)))
+  (insert (propertize "More colors? Press (C-u) c" 'face 'bold))
+
+  (insert "\n\n")
+  (let* ((start-marker (point-marker))
+         (w 220)
+         (h (default-font-height))
+         (half-h (/ h 2))
+         (level (if-let (x sketch-opacity) x 0))
+         (slider-pos (+ h (* (- w (* 2 h)) level))))
+    (setq sketch-slider (svg-create w h :stroke "black"))
+    (insert (concat "OPACITY: "
+                    (format (if sketch-opacity
+                                "%.2f"
+                              "%s"
+                              )
+                            sketch-opacity)
+                    "\n "))
+    (svg-circle sketch-slider half-h half-h (- half-h 4) :stroke "black" :fill "black")
+    (svg-rectangle sketch-slider 0 0 w h :stroke "black ":fill "white" :fill-opacity sketch-opacity)
+    (svg-line sketch-slider h (/ h 2) (- w h) (/ h 2))
+    (when sketch-opacity
+      (svg-line sketch-slider slider-pos (* 0.2 h) slider-pos (* 0.8 h) :stroke-width 3))
+    (sketch-insert-image sketch-slider nil
+                         :map `(((rect . ((0 . 0) . (,w . ,h)))
+                                 slider
+                                 ,(append '(pointer
+                                            hand)))))
+    (dom-set-attribute sketch-slider :image (list w h start-marker (point-marker)))
+    (insert "\n")
+    (apply #'insert-text-button "none"
+           'help-echo
+           "Deactivate opacity"
+           'action
+           (lambda (button) (interactive)
+             (setq sketch-opacity nil)
+             (sketch-slider-refresh))
+           (unless sketch-opacity (list 'face 'link-visited)))))
+
+
 
 (defun sketch-toolbar-widths ()
   (insert "STROKE WIDTH: ")
