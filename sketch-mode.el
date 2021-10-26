@@ -344,6 +344,14 @@ If value of variable ‘sketch-show-labels' is ‘layer', create ..."
           nodes))
     svg-labels))
 
+(defun sketch-selections ()
+  (let* ((selections (sketch-group "Selections"))
+         (bbox (sketch-bbox-ex-transform (car (dom-by-id sketch-root (car sketch-selection)))))
+         (start-coords (cons (nth 0 bbox) (nth 1 bbox)))
+         (end-coords (cons (nth 2 bbox) (nth 3 bbox))))
+    (apply #'svg-rectangle selections `(,@(sketch--rectangle-coords start-coords end-coords)))
+    selections))
+
 
 (defun sketch-labels-list ()
   (apply #'append
@@ -509,6 +517,9 @@ If value of variable ‘sketch-show-labels' is ‘layer', create ..."
                    ([sketch mouse-3] . sketch-text-interactively)
                    ([sketch C-S-drag-mouse-1] . sketch-crop)
                    ([sketch S-down-mouse-1] . sketch-select)
+                   ([sketch S-down-mouse-1] . sketch-select)
+                   ([sketch triple-mouse-4] . sketch-rotate-by-5)
+                   ([sketch triple-mouse-5] . sketch-rotate-by-min-5)
                    ("a" . sketch-set-action)
                    ("c" . sketch-set-colors)
                    ("w" . sketch-set-width)
@@ -600,19 +611,20 @@ transient."
             (win (display-buffer-in-side-window (get-buffer-create "*sketch-key-hints*")
                                                    `((side . bottom)
                                                      (slot . -1)
-                                                     (window-height . 10)))))
+                                                     (window-height . 11)))))
         (set-window-dedicated-p win t)
         (set-window-parameter win 'no-other-window t)
         (with-current-buffer buffer
           (insert
-           "Stroke/Fill            Font              Edit               Toggle          Definition
-------------------------------------------------------------------------------------------------------------------
-[a]      : action      [fw]: font        [v]  : select      [tg]: grid      [D]      : Show definition
-[(C-u) c]: color       [fs]: font-size   [m]  : modify      [ts]: snap      [C-c C-c]: Quick insert to call buffer
-[w]      : width       [fc]: font-color  [d]  : delete      [tt]: toolbar
-[sd]     : dasharray                     [u/U]: undo/redo   [tc]: coords
+           "Stroke/Fill           Font              Edit                 Toggle          Definition
+-------------------------------------------------------------------------------------------------------------------------------
+[a] : action          [fw]: font        [m]  : modify object [tg]: grid      [D]      : Show definition
+[cs]: stroke-color    [fs]: font-size   [v]  : select        [ts]: snap      [X]      : Show xml
+[cf]: fill-color      [fc]: font-color  [d]  : delete        [tt]: toolbar   [C-c C-c]: Quick insert to call buffer
+[w] : width                             [u/U]: undo/redo     [tc]: coords
+[sd]: dasharray
 
-[down-mouse-1] main action, [down-mouse-3] add text ,[C-S drag-mouse-1] crop image")
+[down-mouse-1] main action, [down-mouse-3] add text ,[C-S drag-mouse-1] crop image, [sketch triple-mouse-4/5] rotate selection")
           (setq cursor-type nil)
           (special-mode))))))
 
@@ -758,11 +770,12 @@ VEC should be a cons or a list containing only number elements."
                                                     (car start-coords) (cdr start-coords)
                                                     (sketch--circle-radius start-coords start-coords)))
                                      ('ellipse `(svg-ellipse ,@(sketch--ellipse-coords start-coords start-coords)))
-                                     (var (list (pcase var
-                                                  ((or 'polyline 'freehand) 'svg-polyline)
-                                                  ('polygon 'svg-polygon))
-                                                points))))
-         (label (unless (memq sketch-action '(move translate))
+                                     ((or 'polyline 'polygon 'freehand)
+                                      (list (pcase sketch-action
+                                              ((or 'polyline 'freehand) 'svg-polyline)
+                                              ('polygon 'svg-polygon))
+                                            points))))
+         (label (unless (memq sketch-action '(select move translate))
                   (sketch-create-label sketch-action))))
     (pcase sketch-action
       ('text (let ((text (read-string "Enter text: ")))
@@ -772,14 +785,15 @@ VEC should be a cons or a list containing only number elements."
                       :x (car start-coords)
                       :y (cdr start-coords)
                       :id label object-props)))
-      (_ (unless (memq sketch-action '(move translate))
+      (_ (unless (memq sketch-action '(select move translate))
            (apply (car start-command-and-coords)
                   (nth sketch-active-layer sketch-layers-list)
                   `(,@(cdr start-command-and-coords) ,@object-props :id ,label)))
-         (let* ((node (car (dom-by-id (nth sketch-active-layer sketch-layers-list)
-                                      (if (memq sketch-action '(move translate))
-                                          (car sketch-selection)
-                                        label))))
+         (let* ((node (unless (eq sketch-action 'select)
+                        (car (dom-by-id (nth sketch-active-layer sketch-layers-list)
+                                        (if (memq sketch-action '(move translate))
+                                            (car sketch-selection)
+                                          label)))))
                 (translate-start (dom-attr node 'transform)))
            (track-mouse
              (pcase sketch-action
@@ -876,7 +890,19 @@ VEC should be a cons or a list containing only number elements."
                                                          (car end-coords)
                                                          (cdr end-coords)))
                     (sketch-maybe-update-modeline))))
-               )))))
+
+               ('select (let* ((coords (posn-object-x-y (event-start event)))
+                               (bboxes (seq-filter (lambda (x)
+                                                     (sketch-within-bbox-ex-transform-p coords (cdr x)))
+                                                   sketch-bboxes)))
+                          (let ((next-selections (member (car sketch-selection) (mapcar #'car bboxes))))
+                            (setq sketch-selection (if next-selections
+                                                       (when-let (x (cadr next-selections)) (list x))
+                                                     (when bboxes (list (caar bboxes)))))))))))))
+    (setq sketch-bboxes (mapcar (lambda (x)
+                                  (cons (dom-attr x 'id)
+                                        (sketch-bbox-ex-transform x)))
+                                (dom-children (nth sketch-active-layer sketch-layers-list))))
     (when-let (buf (get-buffer "*sketch-root*"))
       (sketch-update-lisp-window sketch-root buf))
     (sketch-redraw)))
@@ -942,7 +968,7 @@ The elements of the alist cons-cell consisting of the
 transform (symbol) and its values (list)."
   (mapcar (lambda (p)
             (cons (intern (car p))
-                  (mapcar #'string-to-number (split-string (cadr p)))))
+                  (mapcar #'string-to-number (split-string (cadr p) "[, ]" t))))
           (seq-partition (split-string value "[()\n]+" t " *") 2)))
 
 (defun sketch-format-transform (transform-alist)
@@ -980,6 +1006,24 @@ returned by the function `sketch-parse-transform-string'"
      (pcase-let ((`(,cx ,cy ,rx ,ry) (sketch-prop-vals props
                                                      'cx 'cy 'rx 'ry)))
        (print (list (- cx rx) (+ cx rx) (- cy ry) (+ cy ry)))))
+    (`(polyline ,props)
+     (pcase-let ((`(,points) (sketch-prop-vals props 'points)))
+       (let ((coords (mapcar (lambda (x)
+                               (mapcar #'string-to-number (split-string x)))
+                             (split-string points ", " t))))
+         (list (apply #'min (mapcar #'car coords))
+               (apply #'min (mapcar #'cadr coords))
+               (apply #'max (mapcar #'car coords))
+               (apply #'max (mapcar #'cadr coords))))))
+    (`(polygon ,props) ; body identical to polyline
+     (pcase-let ((`(,points) (sketch-prop-vals props 'points)))
+       (let ((coords (mapcar (lambda (x)
+                               (mapcar #'string-to-number (split-string x)))
+                             (split-string points ", " t))))
+         (list (apply #'min (mapcar #'car coords))
+               (apply #'min (mapcar #'cadr coords))
+               (apply #'max (mapcar #'car coords))
+               (apply #'max (mapcar #'cadr coords))))))
     (`(text ,props ,text)
      (pcase-let ((`(,x ,y ,fs) (sketch-prop-vals props
                                                  'x 'y 'font-size))
@@ -1011,6 +1055,11 @@ returned by the function `sketch-parse-transform-string'"
         ('translate (cl-incf  (cl-second t-vals))
                     (when (cl-third t-vals)
                       (cl-incf y1 (cl-third t-vals))))
+
+        ;; TODO correct following comment and 'case' (code); bbox should be
+        ;; tightest fitting rectangle see URL
+        ;; `https://svgwg.org/svg2-draft/coords.html#BoundingBoxes'
+
         ;; To determine the bounding box after a rotation, we separate the
         ;; rotation in a translation of the center (rotation about a 'pivot) of
         ;; the bbox plus a rotation of the bbox around its center. Because the
@@ -1023,13 +1072,13 @@ returned by the function `sketch-parse-transform-string'"
                         (vpx (- cx px)) ; vector pivot to center
                         (vpy (- cy py))
                         (vp-new (sketch-rot-2d vpx vpy rad))
-                        (c-new (cons (+ px (car vp-new)) (+ py (cdr vp-new))))
+                        (c-new (cons (+ px (car vp-new)) (+ py (cdr vp-new)))) ; new center
                         (vx x-rad) ;vector-x center to bbox corner
                         (vy y-rad)
                         (v-new (sketch-rot-2d vx vy rad)))
                    (print vp-new)
-                   (print (list (- (car vp-new) (car v-new)) (- (cdr vp-new) (cdr v-new))
-                                (+ (car vp-new) (car v-new)) (+ (cdr vp-new) (cdr v-new))))))
+                   (print (list (- (car c-new) (car v-new)) (- (cdr c-new) (cdr v-new))
+                                (+ (car c-new) (car v-new)) (+ (cdr c-new) (cdr v-new))))))
         ('scale (let* ((new-x-rad (* (nth 1 t-vals) x-rad))
                        (new-y-rad (when-let (sy (nth 2 t-vals))
                                     (* (nth 2 t-vals) y-rad)))
@@ -1038,15 +1087,19 @@ returned by the function `sketch-parse-transform-string'"
                   (print (list (- cx new-x-rad) new-y1 (+ cx new-x-rad) new-y2))))))))
 
 
-;; (defun sketch-bbox ()
-;;   (let (())))
+(defun sketch-within-bbox-ex-transform-p (coords bbox)
+  (and (or (< (nth 0 bbox) (car coords) (nth 2 bbox))
+           (< (nth 2 bbox) (car coords) (nth 1 bbox)))
+       (or (< (nth 1 bbox) (cdr coords) (nth 3 bbox))
+           (< (nth 3 bbox) (cdr coords) (nth 1 bbox)))))
+
 
 (defun sketch--svg-rotate (dt pivot &optional object-def)
   (interactive)
   (let* ((transform (sketch-parse-transform-string
                     (or (dom-attr object-def 'transform)
                         "rotate(0 0 0)")))
-         (bbox (print (sketch-bbox-ex-transform object-def)))
+         (bbox (sketch-bbox-ex-transform object-def))
         (pivot (if (eq pivot 'center)
                    (cons (/ (+ (nth 2 bbox) (nth 0 bbox)) 2)
                          (/ (+ (nth 3 bbox) (nth 1 bbox)) 2))
@@ -1055,19 +1108,17 @@ returned by the function `sketch-parse-transform-string'"
     (when pivot
       (setf (cl-second (alist-get 'rotate transform)) (car pivot))
       (setf (cl-third (alist-get 'rotate transform)) (cdr pivot)))
-    (print object-def)
     (dom-set-attribute object-def
                        'transform
-                       (sketch-format-transform transform))
-    (print object-def)))
+                       (sketch-format-transform transform))))
 
-(defun sketch-rotate (deg &optional lisp-buffer)
-  (interactive)
-  (let ((node (car (dom-by-id sketch-svg (car sketch-selection)))))
-    (sketch--svg-rotate deg 'center node)
-    (sketch-redraw)
-    (when lisp-buffer
-      (sketch-update-lisp-window))))
+;; (defun sketch-rotate (deg &optional lisp-buffer)
+;;   (interactive)
+;;   (let ((node (car (dom-by-id sketch-svg (car sketch-selection)))))
+;;     (sketch--svg-rotate deg 'center node)
+;;     (sketch-redraw)
+;;     (when lisp-buffer
+;;       (sketch-update-lisp-window))))
 
 (defun sketch-rotate-by-5 (&optional arg)
   (interactive)
@@ -1078,28 +1129,6 @@ returned by the function `sketch-parse-transform-string'"
 (defun sketch-rotate-by-min-5 ()
   (interactive)
   (sketch-rotate-by-5 t))
-
-(defun sketch--svg-translate (dx dy &optional object-def)
-  (interactive)
-  (let ((transform (sketch-parse-transform-string
-                    (or (dom-attr object-def 'transform)
-                        "translate(0,0)"))))
-    (cl-decf (cl-first (alist-get 'translate transform)) dx)
-    (cl-decf (cl-second (alist-get 'translate transform)) dy)
-    (dom-set-attribute object-def
-                       'transform
-                       (sketch-format-transform transform))))
-
-(defun sketch--svg-translate (dx dy &optional object-def)
-  (interactive)
-  (let ((transform (sketch-parse-transform-string
-                    (or (dom-attr object-def 'transform)
-                        "translate(0,0)"))))
-    (cl-decf (cl-first (alist-get 'translate transform)) dx)
-    (cl-decf (cl-second (alist-get 'translate transform)) dy)
-    (dom-set-attribute object-def
-                       'transform
-                       (sketch-format-transform transform))))
 
 (defun sketch--svg-translate (dx dy &optional object-def)
   (interactive)
