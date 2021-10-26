@@ -70,10 +70,10 @@
 (defvar sketch-grid nil)
 (defvar sketch-show-grid t)
 (defvar sketch-background "white")
-(defvar sketch-grid-param 50)
+(defvar sketch-grid-param 100)
 (defvar sketch-minor-grid-param nil)
-(defvar sketch-minor-grid-freq 4)
-(defvar sketch-grid-colors '("gray" . "gray"))
+(defvar sketch-minor-grid-freq 5)
+(defvar sketch-grid-colors '("black" . "black"))
 (defvar sketch-default-stroke "black")
 (defvar sketch-snap-to-grid t)
 
@@ -376,7 +376,7 @@ If value of variable ‘sketch-show-labels' is ‘layer', create ..."
     label))
 
 (defun sketch--create-canvas (width height)
-  (setq sketch-canvas (sketch-create width height nil nil nil :stroke sketch-default-stroke))
+  (setq sketch-canvas (sketch-create width height nil nil nil))
   (apply #'svg-rectangle sketch-canvas 0 0 "100%" "100%"
          :id "bg"
          (when (or sketch-show-grid sketch-background)
@@ -398,7 +398,7 @@ If value of variable ‘sketch-show-labels' is ‘layer', create ..."
                                  (patternUnits . "userSpaceOnUse"))
                                (dom-node 'rect `((width . ,grid-param) (height . ,grid-param)
                                                  (x . 0) (y . 0)
-                                                 (stroke-width . 0.8) (stroke . ,(car sketch-grid-colors))
+                                                 (stroke-width . 0.4) (stroke . ,(car sketch-grid-colors))
                                                  (fill . "url(#minorGrid)"))))
                      ;; minor grid
                      (dom-node 'pattern
@@ -408,7 +408,7 @@ If value of variable ‘sketch-show-labels' is ‘layer', create ..."
                                  (patternUnits . "userSpaceOnUse"))
                                (dom-node 'rect `((width . ,sketch-minor-grid-param) (height . ,sketch-minor-grid-param)
                                                  (x . 0) (y . 0)
-                                                 (stroke-width . 0.4) (stroke . ,(cdr sketch-grid-colors))
+                                                 (stroke-width . 0.2) (stroke . ,(cdr sketch-grid-colors))
                                                  ,(when sketch-background
                                                     `(fill . ,sketch-background))))))))
 
@@ -640,7 +640,7 @@ values"
                  (height (if arg (cdr sketch-size) (read-number "Enter height: "))))
              (switch-to-buffer (get-buffer-create "*sketch*"))
              (setq sketch-action 'line)
-             (setq sketch-grid-param (if arg 50 (read-number "Enter grid parameter (enter 0 for no grid): ")))
+             (setq sketch-grid-param (if arg sketch-grid-param (read-number "Enter grid parameter (enter 0 for no grid): ")))
              (sketch--init width height sketch-grid-param)
              (when sketch-show-coords
                (setq sketch-coordless-mode-line-format mode-line-format)
