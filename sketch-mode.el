@@ -1630,6 +1630,108 @@ color."
     (add-to-list 'mode-line-format '(:eval sketch-cursor-position) t)))
 
 
+(defun sketch-coords-sum (coords-1 coords-2)
+  (cons (+ (car coords-1) (car coords-2))
+        (+ (cdr coords-1) (cdr coords-2))))
+
+(defun sketch-coords-diff (coords-1 coords-2)
+  (cons (- (car coords-1) (car coords-2))
+        (- (cdr coords-1) (cdr coords-2))))
+
+(defun sketch-coords-scale (coords factor)
+  (cons (* factor (car coords))
+        (* factor (cdr coords))))
+
+(defun sketch-coords-cross (coords-1 coords-2)
+  (- (* (car coords-1) (cdr coords-2))
+     (* (cdr coords-1) (car coords-2))))
+
+(defun sketch-line-start (coords)
+  (cons (nth 0 coords) (nth 1 coords)))
+
+(defun sketch-line-end (coords)
+  (cons (nth 2 coords) (nth 3 coords)))
+
+(defun sketch-lines-intersection (coords-1 coords-2)
+  (let* ((p (sketch-line-start coords-1))
+         (q (sketch-line-start coords-2))
+         (r (sketch-coords-diff (sketch-line-end coords-1) p))
+         (s (sketch-coords-diff (sketch-line-end coords-2) q))
+         (lines-vectors-cross (pcase (sketch-coords-cross r s)
+                                (0 (user-error "Lines are parallel"))
+                                (val val)))
+         (u (/ (float (sketch-coords-cross (sketch-coords-diff q p) r))
+               lines-vectors-cross)))
+    (sketch-coords-sum q (sketch-coords-scale s u))))
+
+(defun sketch-calculate-angle-arc (line1-coords line2-coords arc-radius part)
+  "Draw angle arc in positive angle direction."
+  (goto-char (point-min))
+  (let* ((image-size (image-size (get-char-property (point) 'display) t))
+         (intersection (pcase (sketch-lines-intersection line1-coords line2-coords)
+                         ((pred (lambda (x) (or (> (car x) (car image-size))
+                                                (> (cdr x) (cdr image-size)))))
+                          (user-error "Lines cross outside of image"))
+                         (val val)))
+         (slope1-angle (atan (/ (float (- (nth 3 line1-coords) (nth 1 line1-coords)))
+                                (- (nth 2 line1-coords) (nth 0 line1-coords)))))
+         (slope2-angle (atan(/ (float (- (nth 3 line2-coords) (nth 1 line2-coords)))
+                               (- (nth 2 line2-coords) (nth 0 line2-coords)))))
+         (start-angle (min slope1-angle slope2-angle))
+         (stop-angle (max slope1-angle slope2-angle))
+         (p1 (cons (+ (car intersection) (* arc-radius (cos start-angle)))
+                   (+ (cdr intersection) (* arc-radius (sin start-angle)))))
+         (p2 (cons (+ (car intersection) (* arc-radius (cos stop-angle)))
+                   (+ (cdr intersection) (* arc-radius (sin stop-angle)))))
+         (p3 (cons (- (car intersection) (* arc-radius (cos start-angle)))
+                   (- (cdr intersection) (* arc-radius (sin start-angle)))))
+         (p4 (cons (- (car intersection) (* arc-radius (cos stop-angle)))
+                   (- (cdr intersection) (* arc-radius (sin stop-angle))))))
+    (pcase part
+      (1 (cons p1 p2))
+      (2 (cons p2 p3))
+      (3 (cons p3 p4))
+      (4 (cons p4 p1))
+      (_ (user-error "Part should be a number between 1 and 4")))))
+
+(defun sketch-read-label (prompt)
+  (completing-read prompt
+                   (sketch-labels-list)))
+
+(defun sketch-add-angle-arc (orientation &optional label-1 label-2)
+  (interactive (list 1))
+  (let* ((label-1 (or label-1 (sketch-read-label "From line: ")))
+         (label-2 (or label-2 (sketch-read-label "To line: ")))
+         (line-1 (car (dom-by-id sketch-svg (format "^%s$" label-1))))
+         (line-2 (car (dom-by-id sketch-svg (format "^%s$" label-2))))
+         (label (sketch-create-label "arc")))
+
+    (defun sketch-draw-arc (orientation label-1 label-2)
+      (let ((end-points (sketch-calculate-angle-arc (mapcar (lambda (coord)
+                                                              (alist-get coord (cadr line-1)))
+                                                            '(x1 y1 x2 y2))
+                                                    (mapcar (lambda (coord)
+                                                              (alist-get coord (cadr line-2)))
+                                                            '(x1 y1 x2 y2))
+                                                    20
+                                                    orientation)))
+        (svg-path (nth sketch-active-layer sketch-layers-list) `((moveto (,(car end-points)))
+                                                                 (elliptical-arc
+                                                                  ((20 20 ,(cadr end-points) ,(cddr end-points) :sweep t))))
+                  :id label :part orientation :lines (cons label-1 label-2) :fill "transparent" :stroke "black")
+        (print (sketch-redraw))))
+    ;; (sketch-modify-angle label)))
+
+    (defun sketch-rotate-angle ()
+      (let* ((angle (print (car (dom-by-id sketch-root (format "^%s$" label)))))
+             (part (print (dom-attr angle 'part))))
+        (svg-remove (nth sketch-active-layer sketch-layers-list) (format "%s" label))
+        (sketch-draw-arc (if (= part 4) 1 (1+ part)) label-1 label-2)))
+
+    (sketch-draw-arc 1 label-1 label-2)
+      (while (yes-or-no-p "Different part?")
+        (sketch-rotate-angle))))
+
 
 (add-hook 'org-ctrl-c-ctrl-c-final-hook 'sketch-org-toggle-image)
 
