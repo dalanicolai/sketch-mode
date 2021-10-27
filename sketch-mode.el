@@ -105,6 +105,8 @@
 
 (defvar sketch-call-buffer nil)
 
+(defvar sketch-snippet nil)
+
 (defvar sketch-lisp-buffer-name nil)
 (defvar sketch-side-window-max-width (lambda () (- 1 (/ (float (car
                                                                 (image-size
@@ -375,7 +377,8 @@ If value of variable ‘sketch-show-labels' is ‘layer', create ..."
                            ('polygon "g")
                            ('freehand "f")
                            ('text "t")
-                           ('group "g"))))
+                           ('group "g")
+                           ('snippet "s"))))
          (idx 0)
          (label (concat prefix (number-to-string idx)))
          (labels (sketch-labels-list)))
@@ -1244,14 +1247,14 @@ returned by the function `sketch-parse-transform-string'"
       (setq sketch-layers-list (dom-by-id sketch-root "layer"))
       (sketch-redraw))))
 
-(defun sketch-modify-object (&optional group)
+(defun sketch-modify-object (&optional node)
   (interactive)
   (let ((show-labels sketch-show-labels))
     (setq sketch-show-labels "all")
     (sketch-toolbar-refresh)
     (sketch-redraw)
-    (let* ((object-label (if group
-                             group
+    (let* ((object-label (if node
+                             node
                            (completing-read "Transform element with id: "
                                             (sketch-labels-list))))
            (buffer (get-buffer-create (format "*sketch-object-%s*" object-label))))
@@ -1732,6 +1735,92 @@ color."
       (while (yes-or-no-p "Different part?")
         (sketch-rotate-angle))))
 
+(defun sketch-snippet-get-dom (svg-file)
+  (interactive "fCreate dom from file: ")
+  (with-temp-buffer "svg"
+                    (insert-file-contents-literally svg-file)
+                    (xml-remove-comments (point-min) (point-max))
+                    (libxml-parse-xml-region (point-min) (point-max))))
+
+(defun sketch-snippets-add-ids (dom)
+  (let ((idx 0))
+    (dolist (n (dom-by-tag dom 'g))
+      (dom-set-attribute n 'id (number-to-string idx))
+      (setq idx (1+ idx)))))
+
+(defun sketch-snippets-add-labels (dom)
+  (interactive "f")
+  (sketch-snippets-add-ids dom)
+  (mapc (lambda (n)
+          (let* ((s (dom-attr n 'transform))
+                 (coords (when s
+                           (split-string
+                            (string-trim
+                             s
+                             "translate(" ")")
+                            ","))))
+            (svg-text dom
+                      (dom-attr n 'id)
+                      :x (car coords)
+                      :y (cadr coords)
+                      :font-size 10
+                      :stroke "red"
+                      :fill "red")))
+        (cdr (dom-by-tag dom 'g)))
+  ;; (save-current-buffer
+  ;; (when lisp-buffer
+  ;;   (sketch-update-lisp-window lisp lisp-buffer))
+  ;; (let ((lisp-window (or (get-buffer-window "*sketch-root*")
+  ;;                        (get-buffer-window lisp-buffer))))
+  ;;   (unless (string= (buffer-name (window-buffer lisp-window)) "*sketch*")
+  ;;     (if-let (buf (get-buffer"*sketch-root*"))
+  ;;         (sketch-update-lisp-window sketch-root buf)
+  ;;       (sketch-update-lisp-window lisp lisp-buffer))))
+  ;; (setq sketch-root (append (seq-subseq sketch-root 0 2) (list (nth (car show-layers) svg-layers))))
+  ;; (dolist (layer (cdr show-layers))
+  ;;   (setq sketch-root (append sketch-root (list (nth layer svg-layers)))))
+  ;; (setq sketch-svg (append svg-canvas
+  ;;                          (when sketch-show-grid (list sketch-grid))
+  ;;                          (when sketch-show-labels (list (sketch-labels)))
+  ;;                          (list sketch-root)))
+  (let ((inhibit-read-only t))
+    (erase-buffer) ;; a (not exact) alternative is to use (kill-backward-chars 1)
+    (insert-image (svg-image dom))))
+
+(defun sketch-insert-snippet (coords)
+  ;; (interactive "@e")
+  (let (
+        ;; (coords (posn-object-x-y (event-start event)))
+        (label (sketch-create-label 'snippet)))
+    (dom-set-attribute sketch-snippet
+                       'transform
+                       (format "translate(%s,%s)" (car coords) (cdr coords)))
+    (dom-set-attribute sketch-snippet
+                       'id
+                       label)
+    (dom-append-child (nth sketch-active-layer sketch-layers-list) sketch-snippet)
+    (sketch-redraw)))
+    ;; (sketch-modify-object label)))
+
+(defun sketch-import (svg-file)
+  (interactive (list (let ((default-directory (concat
+                                               (file-name-directory (locate-library "sketch-mode"))
+                                               "snippet-files/")))
+                       (read-file-name "Import (object) from file: "))))
+  (let* ((dom (sketch-snippet-get-dom svg-file))
+         (has-groups (dom-by-tag dom 'g)))
+    (when has-groups (sketch-snippets-add-labels dom))
+    (let* ((idx (when has-groups (read-number "Number of object for import: ")))
+           (snippet (if (dom-by-tag dom 'g)
+                        (dom-elements dom 'id (number-to-string idx))
+                      (list (dom-append-child
+                             (sketch-group (sketch-create-label 'group))
+                             (car (dom-children dom)))))))
+      (setq sketch-snippet (car snippet))
+      (sketch-redraw)
+      ;; (while (not (eq (car event) 'down-mouse-1))
+        (let ((event (read-event "Click mouse-1 to insert")))
+          (sketch-insert-snippet (posn-object-x-y (event-start event)))))))
 
 (add-hook 'org-ctrl-c-ctrl-c-final-hook 'sketch-org-toggle-image)
 
