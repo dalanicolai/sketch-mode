@@ -457,27 +457,31 @@ If value of variable ‘sketch-show-labels' is ‘layer', create ..."
   (backward-char))
 
 (defun sketch-object-preview-update (object-type node start-coords end-coords &optional start-node)
-  (pcase object-type
-    ('line
-     (setf (dom-attr node 'x2) (car end-coords))
-     (setf (dom-attr node 'y2) (cdr end-coords)))
-    ('rectangle
-     (setf (dom-attr node 'x) (car (sketch--rectangle-coords start-coords end-coords)))
-     (setf (dom-attr node 'y) (cadr (sketch--rectangle-coords start-coords end-coords)))
-     (setf (dom-attr node 'width) (caddr (sketch--rectangle-coords start-coords end-coords)))
-     (setf (dom-attr node 'height) (cadddr (sketch--rectangle-coords start-coords end-coords))))
-    ('circle
-     (setf (dom-attr node 'r) (sketch--circle-radius start-coords end-coords)))
-    ('ellipse
-     (setf (dom-attr node 'cx) (car (sketch--ellipse-coords start-coords end-coords)))
-     (setf (dom-attr node 'cy) (cadr (sketch--ellipse-coords start-coords end-coords)))
-     (setf (dom-attr node 'rx) (caddr (sketch--ellipse-coords start-coords end-coords)))
-     (setf (dom-attr node 'ry) (cadddr (sketch--ellipse-coords start-coords end-coords))))
-    ('translate
-     (message "deze %s" start-node)
-     (let ((dx (- (car end-coords) (car start-coords)))
-           (dy (- (cdr end-coords) (cdr start-coords))))
-       (sketch--svg-move dx dy node start-node)))))
+  (pcase-let ((`(,x1 . ,y1) start-coords)
+              (`(,x2 . ,y2) end-coords))
+    (pcase object-type
+      ('line
+       (setf (dom-attr node 'x2) x2)
+       (setf (dom-attr node 'y2) y2))
+      ('rectangle
+       (pcase-let ((`(,x ,y ,w ,h) (sketch--rectangle-coords start-coords end-coords)))
+         (setf (dom-attr node 'x) x)
+         (setf (dom-attr node 'y) y)
+         (setf (dom-attr node 'width) w)
+         (setf (dom-attr node 'height) h)))
+      ('circle
+       (setf (dom-attr node 'r) (sketch--circle-radius start-coords end-coords)))
+      ('ellipse
+       (pcase-let ((`(,cx ,cy ,rx ,ry) (sketch--ellipse-coords start-coords end-coords)))
+       (setf (dom-attr node 'cx) cx)
+       (setf (dom-attr node 'cy) cy)
+       (setf (dom-attr node 'rx) rx)
+       (setf (dom-attr node 'ry) ry)))
+      ('translate
+       (message "deze %s" start-node)
+       (let ((dx (- x2 x1))
+             (dy (- y2 y1)))
+         (sketch--svg-move dx dy node start-node))))))
 
 (defun sketch-redraw (&optional lisp lisp-buffer update)
   ;; (unless sketch-mode
