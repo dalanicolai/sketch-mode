@@ -366,7 +366,12 @@ If value of variable ‘sketch-show-labels' is ‘layer', create ..."
          (bbox (sketch-bbox-ex-transform (car (dom-by-id sketch-root (car sketch-selection)))))
          (start-coords (cons (nth 0 bbox) (nth 1 bbox)))
          (end-coords (cons (nth 2 bbox) (nth 3 bbox))))
-    (apply #'svg-rectangle selections `(,@(sketch--rectangle-coords start-coords end-coords)))
+    (apply #'svg-rectangle selections
+           (append `(,@(sketch--rectangle-coords start-coords end-coords) :id "bb")
+                   (when sketch-selection
+                     (let ((tf (dom-attr (car (dom-by-id sketch-svg (car sketch-selection))) 'transform)))
+                       (when tf
+                         (list :transform tf))))))
     selections))
 
 
@@ -1159,6 +1164,9 @@ returned by the function `sketch-parse-transform-string'"
       (setf (cl-second (alist-get 'rotate transform)) (car pivot))
       (setf (cl-third (alist-get 'rotate transform)) (cdr pivot)))
     (dom-set-attribute object-def
+                       'transform
+                       (sketch-format-transform transform))
+    (dom-set-attribute (car (dom-by-id sketch-svg "bb"))
                        'transform
                        (sketch-format-transform transform))))
 
