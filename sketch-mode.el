@@ -59,6 +59,7 @@
 (require 'shr-color)
 (require 'sgml-mode)
 (require 'org-element)
+(require 'cl-lib)
 
 (eval-when-compile
   (require 'evil-vars nil t))
@@ -188,10 +189,23 @@ color.  The function should accept a single argument, the color name."
     (pop-to-buffer buffer-name)
     (message "Click on a color to select it.")))
 
+;;; TODO Some snippet for dom.el?
+(defun sketch-set-attrs (node &rest attributes)
+  "Set selected attributes (symbols) of NODE to ATTRIBUTES."
+  (setq node (dom-ensure-node node))
+  (let ((props (cadr node)))
+    (while attributes
+      (let ((attr (assoc (car attributes) props)))
+        (if attr
+            (setcdr attr (cadr attributes))
+          (setq props (append props
+                              (list (cons (car attributes) (cadr attributes)))))))
+      (setq attributes (cddr attributes)))
+    (setcdr node (list props))))
 
 ;;; Rendering
 
-;;; Some snippets for svg.el
+;;; TODO Some snippets for svg.el?
 (defun svg-marker (svg id width height &optional color reverse)
   "Define a marker with ID to SVG.
 TYPE is `linear' or `radial'.
@@ -457,26 +471,29 @@ If value of variable ‘sketch-show-labels' is ‘layer', create ..."
   (backward-char))
 
 (defun sketch-object-preview-update (object-type node start-coords end-coords &optional start-node)
-  (pcase-let ((`(,x1 . ,y1) start-coords)
+  (pcase-let ((`(,x1 . ,y1) start-coords) ; used in both 'line and 'translate
               (`(,x2 . ,y2) end-coords))
     (pcase object-type
       ('line
-       (setf (dom-attr node 'x2) x2)
-       (setf (dom-attr node 'y2) y2))
+       (sketch-set-attrs node
+                    'x2 x2
+                    'y2 y2))
       ('rectangle
        (pcase-let ((`(,x ,y ,w ,h) (sketch--rectangle-coords start-coords end-coords)))
-         (setf (dom-attr node 'x) x)
-         (setf (dom-attr node 'y) y)
-         (setf (dom-attr node 'width) w)
-         (setf (dom-attr node 'height) h)))
+         (sketch-set-attrs node
+                      'x x
+                      'y y
+                      'width w
+                      'height h)))
       ('circle
-       (setf (dom-attr node 'r) (sketch--circle-radius start-coords end-coords)))
+       (sketch-set-attrs node 'r (sketch--circle-radius start-coords end-coords)))
       ('ellipse
        (pcase-let ((`(,cx ,cy ,rx ,ry) (sketch--ellipse-coords start-coords end-coords)))
-       (setf (dom-attr node 'cx) cx)
-       (setf (dom-attr node 'cy) cy)
-       (setf (dom-attr node 'rx) rx)
-       (setf (dom-attr node 'ry) ry)))
+         (sketch-set-attrs node
+                      'cx cx
+                      'cy cy
+                      'rx rx
+                      'ry ry)))
       ('translate
        (message "deze %s" start-node)
        (let ((dx (- x2 x1))
@@ -711,17 +728,16 @@ VEC should be a cons or a list containing only number elements."
     (expt sum-of-squares 0.5)))
 
 (defun sketch--circle-radius (start-coords end-coords)
-  (sketch-norm
-   (list (- (car end-coords) (car start-coords))
-         (- (cdr end-coords) (cdr start-coords)))))
+  (pcase-let ((`(,xs . ,ys) start-coords) ; used in both 'line and 'translate
+              (`(,xe . ,ye) end-coords))
+    (sketch-norm (list (- xe xs) (- ye ys)))))
 
 (defun sketch--rectangle-coords (start-coords end-coords)
-  (let ((base-coords (cons (apply #'min (list (car start-coords) (car end-coords)))
-                           (apply #'min (list (cdr start-coords) (cdr end-coords))))))
-    (list (car base-coords)
-          (cdr base-coords)
-          (abs (- (car end-coords) (car start-coords)))
-          (abs (- (cdr end-coords) (cdr start-coords))))))
+  (let ((x (apply #'min (list (car start-coords) (car end-coords))))
+        (y (apply #'min (list (cdr start-coords) (cdr end-coords))))
+        (w (abs (- (car end-coords) (car start-coords))))
+        (h (abs (- (cdr end-coords) (cdr start-coords)))))
+    (list x y w h)))
 
 (defun sketch--ellipse-coords (start-coords end-coords)
   (list (/ (+ (car start-coords) (car end-coords)) 2)
@@ -733,14 +749,37 @@ VEC should be a cons or a list containing only number elements."
   (cons (* (round (/ (float (car coord)) grid-param)) grid-param)
         (* (round (/ (float (cdr coord)) grid-param)) grid-param)))
 
+(defun sketch-absolute-coords (svg coords &optional grid-param)
+  (pcase-let* ((w (dom-attr svg 'width))
+               (h (dom-attr svg 'height))
+               (`(,dx ,dy ,vw ,vh) (mapcar #'string-to-number
+                                           (split-string (dom-attr svg 'viewBox))))
+               (scale-w (/ vw w))
+               (scale-h (/ vh h))
+               (abs-x (+ dx (* scale-w (car coords))))
+               (abs-y (+ dy (* scale-h (cdr coords)))))
+    (if grid-param
+        (cons (* (round (/ abs-x grid-param)) grid-param)
+              (* (round (/ abs-y grid-param)) grid-param))
+      (cons abs-x abs-y))))
+
+(defun sketch-pan (event)
+  (interactive "@e")
+  (let ((sketch-action 'pan))
+    (sketch-interactively event)))
+
 (defun sketch-interactively (event)
   "Draw objects interactively via a mouse drag EVENT. "
   (interactive "@e")
   (let* ((start (event-start event))
-         (start-coords (if sketch-snap-to-grid
-                           (sketch--snap-to-grid (posn-object-x-y start) sketch-minor-grid-param)
-                         (posn-object-x-y start)))
-         (points (list (cons (car start-coords) (cdr start-coords)))) ;; list of point needed for polyline/gon
+         (start-rel-coords (posn-object-x-y start))
+         (start-coords (sketch-absolute-coords sketch-svg
+                                               start-rel-coords
+                                               (when sketch-snap-to-grid
+                                                 sketch-minor-grid-param)))
+         (xs (car start-coords))
+         (ys (cdr start-coords))
+         (points (list start-coords)) ;; list of point needed for polyline/gon
          (object-props (if (eq sketch-action 'text)
                            (append (list :font-size sketch-font-size
                                          :font-weight sketch-font-weight)
@@ -771,29 +810,25 @@ VEC should be a cons or a list containing only number elements."
                                 ;;                 "none"))
                                 )))
          (start-command-and-coords (pcase sketch-action
-                                     ('line (list 'svg-line
-                                                  (car start-coords) (cdr start-coords)
-                                                  (car start-coords) (cdr start-coords)))
+                                     ('line (list 'svg-line xs ys xs ys))
                                      ('rectangle `(svg-rectangle
                                                    ,@(sketch--rectangle-coords start-coords start-coords)))
-                                     ('circle (list 'svg-circle
-                                                    (car start-coords) (cdr start-coords)
-                                                    (sketch--circle-radius start-coords start-coords)))
+                                     ('circle (list 'svg-circle xs ys (sketch--circle-radius start-coords start-coords)))
                                      ('ellipse `(svg-ellipse ,@(sketch--ellipse-coords start-coords start-coords)))
                                      ((or 'polyline 'polygon 'freehand)
                                       (list (pcase sketch-action
                                               ((or 'polyline 'freehand) 'svg-polyline)
                                               ('polygon 'svg-polygon))
                                             points))))
-         (label (unless (memq sketch-action '(select move translate))
+         (label (unless (memq sketch-action '(select move translate pan))
                   (sketch-create-label sketch-action))))
     (pcase sketch-action
       ('text (let ((text (read-string "Enter text: ")))
                (apply #'svg-text
                       (nth sketch-active-layer sketch-layers-list)
                       text
-                      :x (car start-coords)
-                      :y (cdr start-coords)
+                      :x xs
+                      :y ys
                       :id label object-props)))
       (_ (unless (memq sketch-action '(select move translate))
            (apply (car start-command-and-coords)
@@ -811,9 +846,12 @@ VEC should be a cons or a list containing only number elements."
                 (let ((event (read-event)))
                   (while (not (memq (car event) '(mouse-1 drag-mouse-1)))
                     (let* ((end (event-start event))
-                           (end-coords (if sketch-snap-to-grid
-                                           (sketch--snap-to-grid (posn-object-x-y end) sketch-minor-grid-param)
-                                         (posn-object-x-y end))))
+                           (end-rel-coords (posn-object-x-y end))
+                           (end-coords (sketch-absolute-coords sketch-svg end-rel-coords
+                                                               (when sketch-snap-to-grid
+                                                                 sketch-minor-grid-param)))
+                           (xe (car end-coords))
+                           (ye (cdr end-coords)))
                       (sketch-object-preview-update sketch-action
                                                     node
                                                     start-coords
@@ -825,17 +863,20 @@ VEC should be a cons or a list containing only number elements."
                         (sketch-update-lisp-window node sketch-lisp-buffer-name))
                       (setq event (read-event))
                       (when sketch-show-coords
-                        (setq sketch-cursor-position (format "(%s, %s)"
-                                                             (car end-coords)
-                                                             (cdr end-coords))))
+                        (setq sketch-cursor-position (format "(%s, %s)" xe ye)))
                       (sketch-maybe-update-modeline)
                       ))
                   (let* ((end (event-end event))
-                         (end-coords (if sketch-snap-to-grid
-                                         (sketch--snap-to-grid (posn-object-x-y end) sketch-minor-grid-param)
-                                       (posn-object-x-y end))))
-                    (if (and (equal (car start-coords) (car end-coords))
-                             (equal (cdr start-coords) (cdr end-coords)))
+                         (end-rel-coords (posn-object-x-y end))
+                         (end-coords (sketch-absolute-coords sketch-svg end-rel-coords
+                                                             (when sketch-snap-to-grid
+                                                               sketch-minor-grid-param)))
+                         (xe (car end-coords))
+                         (ye (cdr end-coords)))
+                    (if (and (equal xs xe)  ; remove when object has no size
+                             (equal ys ye)) ; TODO instead better only create object as soon as it has a size? But then still
+                                                                          ; the object must be removed (either with automatically here, or manually by the user)
+                                                                          ; when the user draws an object with no size
                         (dom-remove-node (nth sketch-active-layer sketch-layers-list) node)
                       (sketch-object-preview-update sketch-action
                                                     node
@@ -854,10 +895,12 @@ VEC should be a cons or a list containing only number elements."
                   (let* ((end (event-start event))
                          (end-coords (if sketch-snap-to-grid
                                          (sketch--snap-to-grid (posn-object-x-y end) sketch-minor-grid-param)
-                                       (posn-object-x-y end))))
+                                       (posn-object-x-y end)))
+                         (xe (car end-coords))
+                         (ye (cdr end-coords)))
                     (let (message-log-max)
                       (message "Press double click to finish by inserting a final node"))
-                    (setf (dom-attr node 'points) (mapconcat (lambda (pair)
+                    (sketch-set-attrs node 'points (mapconcat (lambda (pair)
                                                                (format "%s %s" (car pair) (cdr pair)))
                                                              (reverse
                                                               (if (eq (car event) 'down-mouse-1)
@@ -865,10 +908,9 @@ VEC should be a cons or a list containing only number elements."
                                                                 (cons end-coords points)))
                                                              ", "))
                     (sketch-redraw nil nil t)
-                    (setq sketch-cursor-position (format "(%s, %s)"
-                                                         (car end-coords)
-                                                         (cdr end-coords)))
-                    (sketch-maybe-update-modeline)))
+                    (when sketch-show-coords
+                      (setq sketch-cursor-position (format "(%s, %s)" xe ye))
+                      (sketch-maybe-update-modeline))))
                 (let* ((end (event-end event))
                        (end-coords (if sketch-snap-to-grid
                                        (sketch--snap-to-grid (posn-object-x-y end) sketch-minor-grid-param)
@@ -896,9 +938,7 @@ VEC should be a cons or a list containing only number elements."
                                                              (reverse (cl-pushnew end-coords points))
                                                              ", "))
                     (sketch-redraw nil nil t)
-                    (setq sketch-cursor-position (format "(%s, %s)"
-                                                         (car end-coords)
-                                                         (cdr end-coords)))
+                    (setq sketch-cursor-position (format "(%s, %s)" xe ye))
                     (sketch-maybe-update-modeline))))
 
                ('select (let* ((coords (posn-object-x-y (event-start event)))
@@ -1010,7 +1050,7 @@ returned by the function `sketch-parse-transform-string'"
     (`(circle ,props)
      (pcase-let ((`(,cx ,cy ,r) (sketch-prop-vals props
                                                 'cx 'cy 'r)))
-       (print (list (- cx r) (+ cx r) (- cy r) (+ cy r)))))
+       (list (- cx r) (+ cx r) (- cy r) (+ cy r))))
 
     (`(ellipse ,props)
      (pcase-let ((`(,cx ,cy ,rx ,ry) (sketch-prop-vals props
