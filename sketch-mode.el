@@ -1753,7 +1753,7 @@ color."
   (completing-read prompt
                    (sketch-labels-list)))
 
-(defun sketch-add-angle-arc (orientation &optional label-1 label-2)
+(defun sketch-add-angle-arc (&optional label-1 label-2)
   (interactive (list 1))
   (let* ((label-1 (or label-1 (sketch-read-label "From line: ")))
          (label-2 (or label-2 (sketch-read-label "To line: ")))
