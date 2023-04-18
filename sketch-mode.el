@@ -1789,10 +1789,10 @@ color."
 
 (defun sketch-snippet-get-dom (svg-file)
   (interactive "fCreate dom from file: ")
-  (with-temp-buffer "svg"
-                    (insert-file-contents-literally svg-file)
-                    (xml-remove-comments (point-min) (point-max))
-                    (libxml-parse-xml-region (point-min) (point-max))))
+  (with-temp-buffer
+    (insert-file-contents-literally svg-file)
+    (xml-remove-comments (point-min) (point-max))
+    (libxml-parse-xml-region (point-min) (point-max))))
 
 (defun sketch-snippets-add-ids (dom)
   (let ((idx 0))
